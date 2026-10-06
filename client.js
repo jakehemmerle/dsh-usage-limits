@@ -148,7 +148,7 @@ window.__ModuleLoader__.load({
         if (entry.status === 'signed-out') return `${entry.name} signed out`;
         if (entry.status === 'error') return `${entry.name} unavailable`;
         const top = providerTop(entry);
-        return top === null ? `${entry.name} no limits reported` : `${entry.name} ${top.label} ${top.percent}%`;
+        return `${entry.name} ${top.label} ${top.percent}%`;
       }).join(', ');
     }
 
@@ -156,7 +156,6 @@ window.__ModuleLoader__.load({
       if (entry.status === 'signed-out') return `Not signed in. Sign in to ${entry.name} in DSH to see plan usage.`;
       if (entry.status === 'error') return entry.reason;
       if (entry.status === 'stale') return `From ${formatAgo(now - entry.fetchedAt)}. ${entry.reason}`;
-      if (entry.windows.length === 0) return 'No usage limits reported.';
       return null;
     }
 

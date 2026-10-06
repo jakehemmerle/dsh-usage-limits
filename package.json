@@ -1,0 +1,29 @@
+{
+  "name": "@local/dsh-usage-limits",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude and Codex plan-usage meter beside the composer context meter.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "client.js", "lib/*.js", "cordis.patch.yml"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "fast-check": "^4.3.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

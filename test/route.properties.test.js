@@ -149,6 +149,15 @@ test('codex labels: 18000 s is "5-hour", 604800 s is "Weekly", whichever slot ca
   }), RUNS);
 });
 
+test('codex labels name the window length in minutes, hours, or days', async () => {
+  const expected = { 1800: '30-minute', 3600: '1-hour', 7200: '2-hour', 86400: '1-day', 18000: '5-hour', 604800: 'Weekly', 2592000: '30-day' };
+  for (const [seconds, label] of Object.entries(expected)) {
+    const host = codexOnly({ primary_window: { used_percent: 10, limit_window_seconds: Number(seconds), reset_at: Math.floor(NOW0 / 1000) + 600 } });
+    const [window] = windowsOf((await host.get()).body, 'openai-codex');
+    assert.equal(window.label, label, `${seconds} s`);
+  }
+});
+
 test('headline: the max-percent ok/stale window, earlier provider then earlier window on ties, null when none', async () => {
   const scenario = fc.constantFrom('fresh', 'anthropic-stale', 'codex-signed-out', 'both-signed-out', 'both-error');
   await fc.assert(fc.asyncProperty(anthropicBody, codexBody, scenario, async (anthropic, codex, kind) => {

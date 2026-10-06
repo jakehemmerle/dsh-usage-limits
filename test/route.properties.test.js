@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { assertReport, expectedHeadline } from './support/contract.js';
 import {
-  mountHost, makeClock, reply, serve, signedInRecords, windowsOf,
+  mountHost, makeClock, okReplies, reply, serve, signedInRecords, windowsOf,
   NOW0, HOUR, MINUTE, ANTHROPIC_KEY, CODEX_KEY, PROVIDER_IDS,
 } from './support/host.js';
 import { anthropicBody, codexBody, upstreamExchange, tokenString, windowSeconds } from './support/arbitraries.js';
@@ -62,6 +62,38 @@ test('bounds: windows carry integer percents in [0, 100], unique ids, and non-em
       }
       assert.equal(new Set(windows.map((w) => w.id)).size, windows.length);
     }
+  }), RUNS);
+});
+
+test('a 200 after good data either reports at least one window from that body or keeps the previous windows as stale', async () => {
+  const later = (shaped) => fc.oneof(
+    fc.constantFrom('{"rate_limit":"garbage"}', '{"limits":[{"kind":"session_v2"}]}', '{"limits":[]}', '{}', '[]', 'null'),
+    shaped.map((v) => JSON.stringify(v)),
+    fc.json(),
+  );
+  await fc.assert(fc.asyncProperty(later(anthropicBody), later(codexBody), async (anthropic, codex) => {
+    const good = okReplies();
+    const next = { anthropic, 'openai-codex': codex };
+    const upstream = Object.fromEntries(PROVIDER_IDS.map((provider) => [
+      provider,
+      (request, index) => (index === 0 ? good[provider](request) : reply(200, next[provider])),
+    ]));
+    const host = mountHost({ upstream });
+    const before = (await host.get()).body;
+    host.clock.advance(5 * MINUTE);
+    const { body } = await host.get();
+    assertReport(body);
+    body.providers.forEach((entry, i) => {
+      assert.equal(host.calls[entry.provider].length, 2);
+      if (entry.status === 'ok') {
+        assert.ok(entry.windows.length > 0, `${entry.provider}: ok with no windows`);
+        assert.equal(entry.fetchedAt, body.generatedAt);
+      } else {
+        assert.equal(entry.status, 'stale', `${entry.provider}: ${entry.status}`);
+        assert.deepEqual(entry.windows, before.providers[i].windows);
+        assert.equal(entry.fetchedAt, before.providers[i].fetchedAt);
+      }
+    });
   }), RUNS);
 });
 
@@ -132,9 +164,10 @@ test('headline: the max-percent ok/stale window, earlier provider then earlier w
     });
     let { body } = await host.get();
     if (kind === 'anthropic-stale') {
+      const first = body.providers[0].status;
       host.clock.advance(10 * MINUTE);
       ({ body } = await host.get());
-      assert.equal(body.providers[0].status, 'stale');
+      assert.equal(body.providers[0].status, first === 'ok' ? 'stale' : 'error');
     }
     assertReport(body);
     assert.deepEqual(body.headline, expectedHeadline(body));

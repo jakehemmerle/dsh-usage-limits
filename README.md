@@ -6,6 +6,10 @@ A DeepSeek Harness (DSH) Web plugin that shows how much of your Claude and Codex
 
 A small ring and label sit beside the composer's context meter, for example `Claude 8%`. The label shows the fullest window across both providers. It takes the warning color at 75% and the danger color at 90%. Click it to open a panel that lists every window for each provider: the 5-hour window, the weekly window, per-model weekly windows such as `Weekly · Opus`, and any extra Codex limits. Each row shows the percent used and when it resets.
 
+![Meter beside the context meter](docs/meter.png)
+
+![Panel, dark theme](docs/panel-dark.png) ![Panel, light theme](docs/panel-light.png)
+
 ## Where the data comes from
 
 The plugin reads the OAuth grants DSH already stores when you sign in to a provider:

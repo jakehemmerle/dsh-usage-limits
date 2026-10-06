@@ -155,7 +155,7 @@ test('client: the popover lists every window with relative resets, absolute titl
   const { module } = loadClient(async () => reply(200, '{}'));
   const markup = renderToStaticMarkup(React.createElement(module.UsagePanel, { report, now: NOW0 }));
   assert.match(markup, /role="dialog"/);
-  for (const expected of ['Claude', 'Codex', 'Weekly (Fable)', 'resets in 4h 0m', 'resets in 6d 23h', 'resets in 6d 2h', 'Updated just now']) {
+  for (const expected of ['Claude', 'Codex', 'Weekly · Fable', 'resets in 4h 0m', 'resets in 6d 23h', 'resets in 6d 2h', 'Updated just now']) {
     assert.ok(markup.includes(expected), `missing ${expected}`);
   }
   assert.ok(markup.includes(`title="${new Date(1791313200219).toLocaleString()}"`));

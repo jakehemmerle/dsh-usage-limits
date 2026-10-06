@@ -20,7 +20,7 @@ test('fixtures: the recorded Anthropic and Codex payloads produce these exact wi
         windows: [
           { id: '5-hour', label: '5-hour', percent: 8, resetsAt: 1791313200219, severity: 'normal' },
           { id: 'weekly', label: 'Weekly', percent: 2, resetsAt: 1791900000219, severity: 'normal' },
-          { id: 'weekly-fable', label: 'Weekly (Fable)', percent: 0, resetsAt: 1791900000000, severity: 'normal' },
+          { id: 'weekly-fable', label: 'Weekly · Fable', percent: 0, resetsAt: 1791900000000, severity: 'normal' },
         ],
       },
       {

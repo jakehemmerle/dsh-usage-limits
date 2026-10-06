@@ -132,7 +132,7 @@ test('Claude window ids follow labels, so limits[] and the legacy keys yield the
   }), RUNS);
 });
 
-test('Codex window ids follow labels, with a numeric suffix on collision', async () => {
+test('Codex window ids follow labels, with a numeric suffix on collision, and named limits read "<length> · <name>"', async () => {
   const reset = Math.floor(NOW0 / 1000) + 600;
   const w = (seconds, used) => ({ used_percent: used, limit_window_seconds: seconds, reset_at: reset });
   const body = {
@@ -142,8 +142,8 @@ test('Codex window ids follow labels, with a numeric suffix on collision', async
   };
   const host = mountHost({ upstream: { anthropic: () => reply(200, '{}'), 'openai-codex': () => reply(200, JSON.stringify(body)) } });
   assert.deepEqual(
-    windowsOf((await host.get()).body, 'openai-codex').map((window) => window.id),
-    ['5-hour', '5-hour-2', 'weekly-gpt-5-3-codex-spark', 'spend-limit'],
+    windowsOf((await host.get()).body, 'openai-codex').map((window) => [window.id, window.label]),
+    [['5-hour', '5-hour'], ['5-hour-2', '5-hour'], ['weekly-gpt-5-3-codex-spark', 'Weekly · GPT-5.3-Codex-Spark'], ['spend-limit', 'Spend limit']],
   );
 });
 

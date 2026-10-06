@@ -292,6 +292,7 @@ window.__ModuleLoader__.load({
       apply(ctx) {
         const store = createUsageStore();
         ctx.effect(() => {
+          // Prefetch so the meter shows as soon as a session view mounts: one GET per page load, and the host throttles upstream.
           store.load();
           return () => store.dispose();
         }, 'usage-limits: shared usage store');

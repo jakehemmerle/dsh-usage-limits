@@ -18,9 +18,9 @@ test('fixtures: the recorded Anthropic and Codex payloads produce these exact wi
         plan: null,
         fetchedAt: NOW0,
         windows: [
-          { id: 'session', label: '5-hour', percent: 8, resetsAt: 1791313200219, severity: 'normal' },
-          { id: 'weekly_all', label: 'Weekly', percent: 2, resetsAt: 1791900000219, severity: 'normal' },
-          { id: 'weekly_scoped:fable', label: 'Weekly (Fable)', percent: 0, resetsAt: 1791900000000, severity: 'normal' },
+          { id: '5-hour', label: '5-hour', percent: 8, resetsAt: 1791313200219, severity: 'normal' },
+          { id: 'weekly', label: 'Weekly', percent: 2, resetsAt: 1791900000219, severity: 'normal' },
+          { id: 'weekly-fable', label: 'Weekly (Fable)', percent: 0, resetsAt: 1791900000000, severity: 'normal' },
         ],
       },
       {
@@ -30,7 +30,7 @@ test('fixtures: the recorded Anthropic and Codex payloads produce these exact wi
         plan: 'self_serve_business_prolite',
         fetchedAt: NOW0,
         windows: [
-          { id: 'rate:604800', label: 'Weekly', percent: 0, resetsAt: 1791825776000, severity: 'normal' },
+          { id: 'weekly', label: 'Weekly', percent: 0, resetsAt: 1791825776000, severity: 'normal' },
         ],
       },
     ],
@@ -50,7 +50,7 @@ test('fixtures: the Anthropic legacy windows yield the same session and weekly r
   });
   const { body } = await host.get();
   assert.deepEqual(body.providers[0].windows, [
-    { id: 'five_hour', label: '5-hour', percent: 8, resetsAt: 1791313200219, severity: 'normal' },
-    { id: 'seven_day', label: 'Weekly', percent: 2, resetsAt: 1791900000219, severity: 'normal' },
+    { id: '5-hour', label: '5-hour', percent: 8, resetsAt: 1791313200219, severity: 'normal' },
+    { id: 'weekly', label: 'Weekly', percent: 2, resetsAt: 1791900000219, severity: 'normal' },
   ]);
 });

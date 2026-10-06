@@ -106,6 +106,47 @@ test('bounds: Anthropic fractional utilization (non-integer <= 1) reads as a fra
   }), RUNS);
 });
 
+test('Claude window ids follow labels, so limits[] and the legacy keys yield the same ids', async () => {
+  const reading = fc.option(fc.record({ percent: fc.integer({ min: 0, max: 100 }), hours: fc.integer({ min: 1, max: 7 * 24 }) }), { nil: null });
+  const kinds = [
+    ['five_hour', { kind: 'session' }],
+    ['seven_day', { kind: 'weekly_all' }],
+    ['seven_day_opus', { kind: 'weekly_scoped', scope: { model: { display_name: 'Opus' } } }],
+    ['seven_day_sonnet', { kind: 'weekly_scoped', scope: { model: { display_name: 'Sonnet' } } }],
+  ];
+  const claude = async (body) => {
+    const host = mountHost({ upstream: { anthropic: () => reply(200, JSON.stringify(body)), 'openai-codex': () => reply(200, '{}') } });
+    return windowsOf((await host.get()).body, 'anthropic');
+  };
+  await fc.assert(fc.asyncProperty(fc.tuple(reading, reading, reading, reading), async (readings) => {
+    const limits = [];
+    const legacy = {};
+    readings.forEach((r, i) => {
+      if (r === null) return;
+      const resets_at = new Date(NOW0 + r.hours * HOUR).toISOString();
+      const [key, limit] = kinds[i];
+      limits.push({ ...limit, percent: r.percent, resets_at });
+      legacy[key] = { utilization: r.percent, resets_at };
+    });
+    assert.deepEqual(await claude({ limits }), await claude(legacy));
+  }), RUNS);
+});
+
+test('Codex window ids follow labels, with a numeric suffix on collision', async () => {
+  const reset = Math.floor(NOW0 / 1000) + 600;
+  const w = (seconds, used) => ({ used_percent: used, limit_window_seconds: seconds, reset_at: reset });
+  const body = {
+    rate_limit: { primary_window: w(18000, 1), secondary_window: w(18000, 2) },
+    additional_rate_limits: [{ limit_name: 'GPT-5.3-Codex-Spark', rate_limit: { primary_window: w(604800, 3) } }],
+    spend_control: { individual_limit: { used_percent: 4, reset_at: reset } },
+  };
+  const host = mountHost({ upstream: { anthropic: () => reply(200, '{}'), 'openai-codex': () => reply(200, JSON.stringify(body)) } });
+  assert.deepEqual(
+    windowsOf((await host.get()).body, 'openai-codex').map((window) => window.id),
+    ['5-hour', '5-hour-2', 'weekly-gpt-5-3-codex-spark', 'spend-limit'],
+  );
+});
+
 const validCodexWindow = fc.record({
   used_percent: fc.integer({ min: 0, max: 100 }),
   limit_window_seconds: windowSeconds,

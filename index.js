@@ -34,7 +34,54 @@ export const PROVIDERS = [
   },
 ];
 
+/**
+ * Optional ProviderProxy source: the proxy holds its own Claude and Codex
+ * sign-ins on the server and serves their plan usage at /v1/usage/{claude,chatgpt}.
+ * Shown beside, never instead of, the sign-ins DSH stores itself.
+ */
+export const PROXY_PROVIDERS = [
+  { id: 'providerproxy/anthropic', name: 'Claude (proxy)', path: 'claude', normalize: normalizeAnthropic },
+  { id: 'providerproxy/openai-codex', name: 'Codex (proxy)', path: 'chatgpt', normalize: normalizeCodex },
+];
+export const DEFAULT_PROXY_KEY_ENV = 'PROVIDERPROXY_API_KEY';
+
 export const inject = ['connection', 'credentials'];
+
+/** `config.proxy` is `{ baseURL, apiKeyEnv? }`; anything else leaves the proxy off. */
+function proxyProvidersOf(config) {
+  const proxy = config?.proxy;
+  if (proxy === null || typeof proxy !== 'object' || typeof proxy.baseURL !== 'string' || !/^https?:\/\//.test(proxy.baseURL)) return [];
+  const base = proxy.baseURL.replace(/\/+$/, '');
+  const keyEnv = typeof proxy.apiKeyEnv === 'string' && proxy.apiKeyEnv.length > 0 ? proxy.apiKeyEnv : DEFAULT_PROXY_KEY_ENV;
+  return PROXY_PROVIDERS.map((provider) => ({
+    ...provider,
+    proxy: true,
+    keyEnv,
+    url: `${base}/usage/${provider.path}`,
+    headers: (payload) => ({ Authorization: `Bearer ${payload.access}` }),
+  }));
+}
+
+/** The proxy client token is the credential: absent means "not configured here". */
+function classifyProxy(key) {
+  if (typeof key !== 'string' || key.length === 0) return { credential: { kind: 'absent' }, secrets: [] };
+  const fingerprint = createHash('sha256').update(key).digest('hex');
+  return { credential: { kind: 'usable', fingerprint }, secrets: [key], payload: { access: key } };
+}
+
+/** ProviderProxy errors are safe for publication; show their message rather than a bare status. */
+async function proxyFailure(response) {
+  if (response.status === 429) return null;
+  try {
+    const message = JSON.parse(await response.text())?.error?.message;
+    if (typeof message === 'string' && message.length > 0 && message.length <= 200) {
+      return { kind: 'failed', reason: `ProviderProxy: ${message} (HTTP ${response.status})` };
+    }
+  } catch {
+    // Fall through to the plain HTTP outcome.
+  }
+  return { kind: 'failed', reason: `ProviderProxy returned HTTP ${response.status}` };
+}
 
 function minIntervalOf(config) {
   const value = config?.minIntervalMs;
@@ -71,10 +118,11 @@ function retryAfterMs(response) {
 /**
  * Build the plugin around injectable seams. DSH loads the module-level
  * `apply`, bound to the real fetch and clock; tests build their own.
- * @param deps - `{ fetch, now, timeoutMs? }`.
+ * @param deps - `{ fetch, now, timeoutMs?, env? }`; `env()` returns the variables holding a proxy token.
  */
 export function createPlugin(deps) {
   const timeoutMs = deps.timeoutMs ?? UPSTREAM_TIMEOUT_MS;
+  const env = deps.env ?? (() => process.env);
 
   async function fetchUsage(provider, payload, signal, now) {
     const controller = new AbortController();
@@ -91,6 +139,9 @@ export function createPlugin(deps) {
       try {
         const response = await deps.fetch(provider.url, { method: 'GET', headers: provider.headers(payload), signal: controller.signal });
         if (!response.ok) {
+          // A proxy 401/403 is about its client token, not a DSH sign-in that DSH will refresh.
+          const proxied = provider.proxy ? await proxyFailure(response) : null;
+          if (proxied !== null) return proxied;
           await response.body?.cancel().catch(() => {});
           return { kind: 'http', status: response.status, retryAfterMs: retryAfterMs(response) };
         }
@@ -118,7 +169,8 @@ export function createPlugin(deps) {
 
   function apply(ctx, config = {}) {
     const policy = { minIntervalMs: minIntervalOf(config) };
-    const states = new Map(PROVIDERS.map((provider) => [provider.id, initialState()]));
+    const providers = [...PROVIDERS, ...proxyProvidersOf(config)];
+    const states = new Map(providers.map((provider) => [provider.id, initialState()]));
     const inflight = new Map();
     const lifetime = new AbortController();
 
@@ -129,6 +181,7 @@ export function createPlugin(deps) {
     };
 
     async function readCredential(provider, now) {
+      if (provider.proxy) return classifyProxy(env()[provider.keyEnv]);
       try {
         return classify(provider, await ctx.credentials.readRecord(provider.recordKey), now);
       } catch {
@@ -149,15 +202,15 @@ export function createPlugin(deps) {
     }
 
     async function respond() {
-      const reads = await Promise.all(PROVIDERS.map(settleProvider));
+      const reads = await Promise.all(providers.map(settleProvider));
       const now = deps.now();
-      const providers = PROVIDERS.map((provider, i) => projectProvider(provider, states.get(provider.id), reads[i].credential, now));
-      return redact(buildReport(providers, now), reads.flatMap((read) => read.secrets));
+      const entries = providers.map((provider, i) => projectProvider(provider, states.get(provider.id), reads[i].credential, now));
+      return redact(buildReport(entries, now), reads.flatMap((read) => read.secrets));
     }
 
     function fallback(now) {
       const reason = 'Usage limits are temporarily unavailable';
-      return buildReport(PROVIDERS.map((p) => ({ provider: p.id, name: p.name, status: 'error', reason })), now);
+      return buildReport(providers.map((p) => ({ provider: p.id, name: p.name, status: 'error', reason })), now);
     }
 
     ctx.effect(() => () => lifetime.abort(new Error('usage-limits plugin disposed')), 'usage-limits: in-flight upstream requests');

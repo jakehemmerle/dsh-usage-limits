@@ -26,6 +26,19 @@ Neither endpoint is documented, so either may change shape without notice. When 
 
 The plugin never refreshes, writes, or logs tokens. If a stored token has expired, it waits for DSH to refresh it on the next model request. It calls each endpoint at most once every 5 minutes and backs off further after errors. The browser polls the plugin's own route every 60 seconds, which does not reach upstream more often.
 
+## ProviderProxy
+
+A host whose sessions go through [providerproxy](https://github.com/jakehemmerle/providerproxy) holds no DSH sign-in of its own; the proxy holds the Claude and Codex sign-ins on its server. Add a `proxy` block to read those accounts too:
+
+```yaml
+      config:
+        proxy:
+          baseURL: http://gpu.tail47033e.ts.net:4000/v1
+          apiKeyEnv: PROVIDERPROXY_API_KEY   # the default
+```
+
+The plugin then calls `GET <baseURL>/usage/claude` and `<baseURL>/usage/chatgpt` with the proxy's client token from that environment variable. These show as `Claude (proxy)` and `Codex (proxy)` beside any DSH sign-ins, under the same throttle. Without the variable they count as signed out. The proxy itself reads each upstream at most once a minute and strips the account's email and ids.
+
 ## Install
 
 Add an insert row to `~/.dsh/profiles/web/cordis.patch.yml`, then reload the DSH page. Restart DSH if the meter does not appear.

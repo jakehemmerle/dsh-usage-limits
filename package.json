@@ -1,29 +1,48 @@
 {
   "name": "@local/dsh-usage-limits",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Claude and Codex plan-usage meter beside the composer context meter.",
+  "description": "Claude and Codex plan usage: omp-style line in dst, ring meter in dsh web.",
   "type": "module",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
+    "./tui": "./tui.js",
     "./package.json": "./package.json"
   },
-  "files": ["index.js", "client.js", "lib/*.js", "cordis.patch.yml"],
+  "files": [
+    "index.js",
+    "client.js",
+    "tui.js",
+    "lib/*.js",
+    "cordis.patch.yml"
+  ],
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "immediately": true,
-      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
     }
   },
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "link-host": "node scripts/link-host.mjs",
+    "test": "node scripts/link-host.mjs && NODE_ENV=test node --preserve-symlinks --test test/*.test.js",
+    "test:e2e:tui": "NODE_ENV=test node --test --test-concurrency=1 --test-timeout=21600000 test/e2e/tui.e2e.test.js",
+    "test:e2e:web": "NODE_ENV=test node --test --test-concurrency=1 --test-timeout=21600000 test/e2e/web.e2e.test.js"
   },
   "devDependencies": {
+    "@xterm/headless": "^5.5.0",
     "fast-check": "^4.3.0",
+    "playwright": "^1.64.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
+  },
+  "engines": {
+    "node": ">=22.19"
   }
 }

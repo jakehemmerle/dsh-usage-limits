@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 
+// UsageReport v2 (SPEC.md 0.2.0): severity 50/80, windows carry span and short, the headline is the
+// fullest line window (fallback: fullest window), and ProviderProxy accounts come first.
 const SEVERITIES = ['normal', 'warning', 'critical'];
-const PROVIDERS = [
+const LOCAL = [
   { provider: 'anthropic', name: 'Claude' },
   { provider: 'openai-codex', name: 'Codex' },
+];
+const PROXY = [
+  { provider: 'providerproxy/anthropic', name: 'Claude (proxy)' },
+  { provider: 'providerproxy/openai-codex', name: 'Codex (proxy)' },
 ];
 
 function assertKeys(value, keys, where) {
@@ -15,13 +21,17 @@ function isNullableEpoch(value) {
 }
 
 export function severityOf(percent) {
-  if (percent >= 90) return 'critical';
-  if (percent >= 75) return 'warning';
+  if (percent >= 80) return 'critical';
+  if (percent >= 50) return 'warning';
   return 'normal';
 }
 
 export function assertWindow(window, where) {
-  assertKeys(window, ['id', 'label', 'percent', 'resetsAt', 'severity'], where);
+  assertKeys(window, ['id', 'label', 'percent', 'resetsAt', 'severity', 'span', 'short'], where);
+  assert.ok(window.span === null || (Number.isInteger(window.span) && window.span > 0), `${where}: span`);
+  assert.ok(window.short === null || window.short === '5h' || window.short === '7d', `${where}: short`);
+  if (window.short === '5h') assert.equal(window.span, 18000, `${where}: 5h span`);
+  if (window.short === '7d') assert.equal(window.span, 604800, `${where}: 7d span`);
   assert.equal(typeof window.id, 'string', `${where}: id`);
   assert.ok(window.id.length > 0, `${where}: id non-empty`);
   assert.equal(typeof window.label, 'string', `${where}: label`);
@@ -64,34 +74,42 @@ export function assertProvider(entry, expected, where) {
   assert.equal(new Set(ids).size, ids.length, `${where}: unique window ids ${JSON.stringify(ids)}`);
 }
 
+/** The fullest line window (5h/7d, shared) over ok/stale entries; else the fullest window of any kind. */
 export function expectedHeadline(report) {
-  let best = null;
-  for (const entry of report.providers) {
-    if (entry.status !== 'ok' && entry.status !== 'stale') continue;
-    for (const window of entry.windows) {
-      if (best === null || window.percent > best.percent) {
-        best = {
-          provider: entry.provider,
-          name: entry.name,
-          label: window.label,
-          percent: window.percent,
-          severity: window.severity,
-        };
+  const pick = (accept) => {
+    let best = null;
+    for (const entry of report.providers) {
+      if (entry.status !== 'ok' && entry.status !== 'stale') continue;
+      for (const window of entry.windows) {
+        if (!accept(window)) continue;
+        if (best === null || window.percent > best.percent) {
+          best = {
+            provider: entry.provider,
+            name: entry.name,
+            label: window.label,
+            short: window.short,
+            percent: window.percent,
+            severity: window.severity,
+          };
+        }
       }
     }
-  }
-  return best;
+    return best;
+  };
+  return pick((window) => window.short !== null) ?? pick(() => true);
 }
 
-export function assertReport(report) {
+/** `proxy`: whether the row configures ProviderProxy (its two accounts come first). */
+export function assertReport(report, { proxy = false } = {}) {
   assert.equal(typeof report, 'object');
   assert.notEqual(report, null);
   assertKeys(report, ['generatedAt', 'providers', 'headline'], 'report');
   assert.ok(Number.isInteger(report.generatedAt), 'report.generatedAt');
-  assert.equal(report.providers.length, 2, 'both providers');
-  report.providers.forEach((entry, i) => assertProvider(entry, PROVIDERS[i], `providers[${i}]`));
+  const expected = proxy ? [...PROXY, ...LOCAL] : LOCAL;
+  assert.equal(report.providers.length, expected.length, 'every configured account, in order');
+  report.providers.forEach((entry, i) => assertProvider(entry, expected[i], `providers[${i}]`));
   if (report.headline !== null) {
-    assertKeys(report.headline, ['provider', 'name', 'label', 'percent', 'severity'], 'headline');
+    assertKeys(report.headline, ['provider', 'name', 'label', 'short', 'percent', 'severity'], 'headline');
   }
-  assert.deepEqual(report.headline, expectedHeadline(report), 'headline is the max window');
+  assert.deepEqual(report.headline, expectedHeadline(report), 'headline is the fullest line window');
 }

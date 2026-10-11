@@ -109,17 +109,17 @@ test('client: registers one dock entry beside the context meter and requires onl
   assert.ok(required.every((id) => LOADER_MODULES.has(id)));
 });
 
-test('client: the fixture-derived report renders the trigger "Claude 8%"', async () => {
+test('client: the fixture-derived report renders the trigger "Claude 5h 8%"', async () => {
   const { markup, browser } = await renderDock(mountHost());
   const trigger = triggerOf(markup);
-  assert.equal(trigger.text, 'Claude 8%');
+  assert.equal(trigger.text, 'Claude 5h 8%');
   assert.match(trigger.tag, /aria-haspopup="dialog"/);
   assert.match(trigger.tag, /aria-label="[^"]*Claude 5-hour 8%[^"]*Codex Weekly 0%[^"]*"/);
   assert.doesNotMatch(trigger.className, /--(warning|critical)/);
   assert.ok(browser.calls.every((url) => url.startsWith('api/usage-limits')));
 });
 
-test('client: Codex at 91% headlines as "Codex 91%" with the critical class', async () => {
+test('client: Codex at 91% headlines as "Codex 7d 91%" with the critical class', async () => {
   const codex = JSON.parse(fixture('codex-wham-usage.json'));
   codex.rate_limit.primary_window.used_percent = 91;
   const host = mountHost({
@@ -129,8 +129,38 @@ test('client: Codex at 91% headlines as "Codex 91%" with the critical class', as
     },
   });
   const trigger = triggerOf((await renderDock(host)).markup);
-  assert.equal(trigger.text, 'Codex 91%');
+  assert.equal(trigger.text, 'Codex 7d 91%');
   assert.match(trigger.className, /usage-limits--critical/);
+});
+
+test('client: severity classes follow omp\'s thresholds (warning from 50%, critical from 80%)', async () => {
+  for (const [percent, cls] of [[49, null], [50, 'warning'], [79, 'warning'], [80, 'critical']]) {
+    const codex = JSON.parse(fixture('codex-wham-usage.json'));
+    codex.rate_limit.primary_window.used_percent = percent;
+    const host = mountHost({
+      upstream: {
+        anthropic: () => reply(200, fixture('anthropic-oauth-usage.json')),
+        'openai-codex': () => reply(200, JSON.stringify(codex)),
+      },
+    });
+    const trigger = triggerOf((await renderDock(host)).markup);
+    assert.equal(trigger.text, `Codex 7d ${percent}%`);
+    if (cls === null) assert.doesNotMatch(trigger.className, /--(warning|critical)/);
+    else assert.match(trigger.className, new RegExp(`usage-limits--${cls}`));
+  }
+});
+
+test('client: a scoped window is never the headline while a 5h/7d window exists', async () => {
+  const claude = JSON.parse(fixture('anthropic-oauth-usage.json'));
+  for (const limit of claude.limits) if (limit.kind === 'weekly_scoped') limit.percent = 97;
+  const host = mountHost({
+    upstream: {
+      anthropic: () => reply(200, JSON.stringify(claude)),
+      'openai-codex': () => reply(200, fixture('codex-wham-usage.json')),
+    },
+  });
+  const trigger = triggerOf((await renderDock(host)).markup);
+  assert.equal(trigger.text, 'Claude 5h 8%');
 });
 
 test('client: renders nothing until the first report arrives', async () => {

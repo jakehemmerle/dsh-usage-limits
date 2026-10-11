@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stands in for `omp usage --json` when test/oracle/cmux-usage runs: prints $OMP_STUB_JSON.
+[ "$1" = usage ] && [ "$2" = --json ] || exit 2
+cat "$OMP_STUB_JSON"

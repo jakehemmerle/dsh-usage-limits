@@ -43,12 +43,12 @@ test('proxy: reads both accounts through the proxy with only its bearer token', 
   const host = mountProxy({ upstream: byUrl });
   const report = await host.get();
   assert.deepEqual(report.providers.map((p) => [p.provider, p.name, p.status]), [
-    ['anthropic', 'Claude', 'signed-out'],
-    ['openai-codex', 'Codex', 'signed-out'],
     ['providerproxy/anthropic', 'Claude (proxy)', 'ok'],
     ['providerproxy/openai-codex', 'Codex (proxy)', 'ok'],
+    ['anthropic', 'Claude', 'signed-out'],
+    ['openai-codex', 'Codex', 'signed-out'],
   ]);
-  assert.deepEqual(report.headline, { provider: 'providerproxy/anthropic', name: 'Claude (proxy)', label: '5-hour', percent: 8, severity: 'normal' });
+  assert.deepEqual(report.headline, { provider: 'providerproxy/anthropic', name: 'Claude (proxy)', label: '5-hour', short: '5h', percent: 8, severity: 'normal' });
   assert.equal(host.calls.length, 2);
   for (const call of host.calls) assert.equal(call.headers.authorization, `Bearer ${TOKEN}`);
   assert.ok(!JSON.stringify(report).includes(TOKEN));
@@ -87,4 +87,24 @@ test('proxy: 429 keeps Retry-After backoff', async () => {
   host.clock.advance(25 * MINUTE);
   await host.get();
   assert.equal(host.calls.length, 4);
+});
+
+test('proxy: ProviderProxy accounts refresh every 60 s by default (its own cache), sign-ins every 5 min', async () => {
+  const host = mountProxy({ upstream: byUrl });
+  await host.get();
+  assert.equal(host.calls.length, 2);
+  host.clock.advance(59_000);
+  await host.get();
+  assert.equal(host.calls.length, 2, 'not before 60 s');
+  host.clock.advance(2_000);
+  await host.get();
+  assert.equal(host.calls.length, 4, 'both proxy accounts again after 60 s');
+});
+
+test('proxy: proxy.minIntervalMs below 60 s is raised to 60 s', async () => {
+  const host = mountProxy({ upstream: byUrl, config: { proxy: { baseURL: BASE, minIntervalMs: 1000 } } });
+  await host.get();
+  host.clock.advance(30_000);
+  await host.get();
+  assert.equal(host.calls.length, 2);
 });

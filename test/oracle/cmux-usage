@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Claude/Codex usage (5h + 7d windows), read from `omp usage --json`.
+#   lines   plain two-line summary (manual checks)
+#   bars    one ANSI mini-bar line for the omp widget under the editor
+#   tui     full-screen view for the cmux Dock, refreshes every 60s or on any key
+# Prints nothing and exits 1 when usage is unavailable.
+set -u
+OMP_BIN="${OMP_BIN:-$(command -v omp || echo "$HOME/.local/bin/omp")}"
+
+json=""
+fetch() {
+	json=$("$OMP_BIN" usage --json 2>/dev/null) || json=""
+	[[ -n "$json" ]] && ! jq -e '.reports | type == "array"' >/dev/null 2>&1 <<<"$json" && json=""
+	return 0
+}
+
+# window <claude|codex> <5h|7d> → "usedPct resetsAtMs" or nothing.
+window() {
+	[[ -n "$json" ]] || return 0
+	local filter
+	case "$1" in
+	claude) filter='first(.reports[]? | select(.provider=="anthropic") | .limits[]? | select(.id=="anthropic:"+$w))' ;;
+	codex) filter='first(.reports[]? | select(.provider=="openai-codex") | .limits[]? | select(.window.id?==$w))' ;;
+	esac
+	jq -r --arg w "$2" "$filter"' | select(.amount.usedFraction? != null and .window.resetsAt? != null) | "\((.amount.usedFraction*100)|round) \(.window.resetsAt)"' <<<"$json" 2>/dev/null
+}
+
+now_ms() { echo $(($(date +%s) * 1000)); }
+
+# dur <ms-from-now>
+dur() {
+	local m=$(($1 / 60000))
+	if (($1 <= 0)); then echo now
+	elif ((m < 60)); then echo "${m}m"
+	elif ((m < 600)); then echo "$((m / 60))h$((m % 60))m"
+	elif ((m < 1440)); then echo "$((m / 60))h"
+	else echo "$((m / 1440))d$((m % 1440 / 60))h"
+	fi
+}
+
+# ANSI 256 colors that stay readable on light and dark backgrounds: green < 50 ≤ amber < 80 ≤ red.
+ansi() {
+	if (($1 >= 80)); then echo "38;5;160"
+	elif (($1 >= 50)); then echo "38;5;130"
+	else echo "38;5;28"
+	fi
+}
+
+# bar <pct> <cells> → filled/empty block string
+bar() {
+	local fill=$((($1 * $2 + 50) / 100)) i out=""
+	((fill > $2)) && fill=$2
+	for ((i = 0; i < $2; i++)); do if ((i < fill)); then out+="█"; else out+="░"; fi; done
+	printf '%s' "$out"
+}
+
+name() { [[ "$1" == claude ]] && echo Claude || echo Codex; }
+
+# segment <label> <"pct reset"|"">
+segment() {
+	if [[ -z "$2" ]]; then echo "$1 n/a"; return; fi
+	local pct=${2% *} reset=${2#* }
+	echo "$1 ${pct}% ($(dur $((reset - $(now_ms)))))"
+}
+
+# line <claude|codex> → "Claude 5h 35% (1h20m) · 7d 52% (19h)"; returns 1 when provider has no window.
+line() {
+	local w5 w7
+	w5=$(window "$1" 5h)
+	w7=$(window "$1" 7d)
+	[[ -z "$w5" && -z "$w7" ]] && return 1
+	echo "$(name "$1") $(segment 5h "$w5") · $(segment 7d "$w7")"
+}
+
+# bars_part <claude|codex> → bold name, then "5h ████░░░░ 39% ↻1h7m" per window.
+bars_part() {
+	local wid w pct out=""
+	for wid in 5h 7d; do
+		w=$(window "$1" $wid)
+		[[ -n "$w" ]] || continue
+		pct=${w% *}
+		out+=$(printf ' %s \e[%sm%s %s%%\e[0m \e[2m↻%s\e[0m' "$wid" "$(ansi $pct)" "$(bar $pct 8)" "$pct" "$(dur $((${w#* } - $(now_ms))))")
+	done
+	[[ -n "$out" ]] || return 1
+	printf '\e[1m%s\e[0m%s' "$(name "$1")" "$out"
+}
+
+# join <separator> <fn>: runs fn for both providers, joins available parts; exit 1 when none.
+join() {
+	local sep=$1 fn=$2 p part out=""
+	for p in claude codex; do
+		part=$($fn $p) || continue
+		[[ -n "$out" ]] && out+=$sep
+		out+=$part
+	done
+	[[ -n "$out" ]] || return 1
+	printf '%s\n' "$out"
+}
+
+# bar_row <label> <"pct reset"|"">; bar width $BAR fits label(9) + pct(4) + "↻ 6d22h" in the terminal width.
+BAR=16
+bar_row() {
+	local label=$1 cells="" i
+	if [[ -z "$2" ]]; then
+		for ((i = 0; i < BAR; i++)); do cells+="·"; done
+		printf '%-9s \e[2m%s\e[0m  n/a\n' "$label" "$cells"
+		return
+	fi
+	local pct=${2% *} reset=${2#* }
+	printf '%-9s \e[%sm%s\e[0m %4s ↻ %s\n' "$label" "$(ansi $pct)" "$(bar $pct $BAR)" "${pct}%" "$(dur $((reset - $(now_ms))))"
+}
+
+tui() {
+	tput civis 2>/dev/null
+	trap 'tput cnorm 2>/dev/null' EXIT
+	trap 'exit 0' INT TERM
+	trap ':' WINCH # interrupts `read` so a resize redraws immediately
+	while :; do
+		fetch
+		read -r _ BAR < <(stty size 2>/dev/null || echo "0 40")
+		BAR=$((BAR - 23))
+		((BAR > 16)) && BAR=16
+		((BAR < 4)) && BAR=4
+		clear
+		printf '\e[1mUsage\e[0m\n'
+		if [[ -z "$json" ]]; then
+			printf '\e[31momp usage failed\e[0m\n'
+		else
+			bar_row "Claude 5h" "$(window claude 5h)"
+			bar_row "Claude 7d" "$(window claude 7d)"
+			bar_row "Codex 5h" "$(window codex 5h)"
+			bar_row "Codex 7d" "$(window codex 7d)"
+		fi
+		printf '\e[2mupdated %s · key=refresh\e[0m' "$(date +%H:%M:%S)"
+		read -rsn1 -t 60 _ || true
+	done
+}
+
+case "${1:-}" in
+lines)
+	fetch
+	ok=1
+	line claude && ok=0
+	line codex && ok=0
+	exit $ok
+	;;
+bars) fetch && join "   " bars_part ;;
+tui) tui ;;
+*)
+	echo "usage: cmux-usage lines|bars|tui" >&2
+	exit 2
+	;;
+esac

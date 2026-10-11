@@ -1,0 +1,71 @@
+dsh-usage-limits launchpad-status: show plugin status contributions on the Launchpad.
+
+dsh-TUI 0.14.0 renders `ctx.tuiStatus` text entries and rich views (registerView) only in
+Chat, above the prompt. The Launchpad (first screen) is a separate component and showed
+none, so a status line appeared only after the first prompt. Chat now passes its status
+entries, views, the pointer-only view kit and the view error reporter to the Launchpad,
+which renders them the same way (rich views inside PluginStatusViewBoundary, then the
+joined dim text) in one full-width, centred block above the input card.
+
+Applies after the other pkgs/dsh-tui.nix patches and before dsh-speed's postPatch script.
+
+--- a/lib/types/screens/Chat.js
++++ b/lib/types/screens/Chat.js
+@@ -5641,7 +5641,7 @@
+             // 内核入口带名（「内核 · Claude」）：backendId 是内核身份的唯一来源。
+             backendId: kernelCurrentId,
+         });
+-        const launchpad = (_jsx(Launchpad, { query: launchpadDraft, cursorOffset: launchpadCaret, focusIndex: launchpadFocus, isTerminalFocused: terminalFocused, whale: channel.whale, whaleIdle: channel.whaleIdle, whaleGirl: channel.whaleGirl, fontId: splashFontIdOf(channel.splashFont), brand: brand, starred: starred, onStarClick: runStarAction, firstRun: onboardingPending, actions: launchpadActions, 
++        const launchpad = (_jsx(Launchpad, { statusEntries: statusEntries, statusViews: statusViews, statusViewUi: STATUS_VIEW_UI, onStatusViewError: (key, error) => statusContributions.reportViewError(key, error), query: launchpadDraft, cursorOffset: launchpadCaret, focusIndex: launchpadFocus, isTerminalFocused: terminalFocused, whale: channel.whale, whaleIdle: channel.whaleIdle, whaleGirl: channel.whaleGirl, fontId: splashFontIdOf(channel.splashFont), brand: brand, starred: starred, onStarClick: runStarAction, firstRun: onboardingPending, actions: launchpadActions, 
+             // 参数行四段点开的既有选择器（第五版）：pickerPanels 与聊天页共用
+             // 同一份 JSX，盖在落地页之上；选择器开着时落地页键盘让位（inputPaused）。
+             overlayPanel: launchpadOverlayUp ? pickerPanels : undefined, inputPaused: launchpadOverlayUp, onCycleEffort: () => { void cycleEffort(channel); }, onParamPick: (segment) => {
+--- a/lib/types/screens/Launchpad.js
++++ b/lib/types/screens/Launchpad.js
+@@ -2,6 +2,7 @@
+ import React from 'react';
+ import { Box, Text, useInput, useTerminalSize } from '../ui.js';
+ import { SearchBox } from '../components/SearchBox.js';
++import { PluginStatusViewBoundary } from '../components/PluginStatusViewBoundary.js';
+ import { OverlayAbove } from '../components/OverlayAbove.js';
+ import { CommandSuggestions } from '../components/CommandSuggestions.js';
+ import { LogoV2 } from '../components/LogoV2.js';
+@@ -230,7 +231,11 @@
+  * 天然没有它们，所以每个可点目标都必须有一条键盘路径（这里全部有：焦点 +
+  * Enter）。
+  */
+-export function Launchpad({ query, cursorOffset, focusIndex, isTerminalFocused, whale, whaleIdle, whaleGirl, brand, fontId, starred, onStarClick, firstRun, actions, overlayPanel, inputPaused = false, onParamPick, model, effort, preset, permission, commands, onCommandPick, clipboardReader = readClipboard, 
++// dsh-usage-limits launchpad-status (nix-config pkgs/dsh-tui/launchpad-status.patch): plugin status
++// contributions (tuiStatus text entries and rich views) also show on the Launchpad, above the input card.
++const NO_STATUS_ENTRIES = Object.freeze([]);
++const NO_STATUS_VIEWS = Object.freeze([]);
++export function Launchpad({ statusEntries = NO_STATUS_ENTRIES, statusViews = NO_STATUS_VIEWS, statusViewUi, onStatusViewError, query, cursorOffset, focusIndex, isTerminalFocused, whale, whaleIdle, whaleGirl, brand, fontId, starred, onStarClick, firstRun, actions, overlayPanel, inputPaused = false, onParamPick, model, effort, preset, permission, commands, onCommandPick, clipboardReader = readClipboard, 
+ /** Tips 自动轮换间隔（第七版；测试缝：无头回归注入短间隔确定性驱动相位）。 */
+ tipRotateMs = TIP_ROTATE_MS, 
+ /** 左下角工作目录铭牌被点击/回车时交给 Chat（开既有的 /workspace 工作区菜单）。 */
+@@ -381,7 +386,10 @@
+     /** 内核区进不进焦点环：画得出来**且**接了回调（可点才需要键盘等价操作）。 */
+     const kernelCornerFocusable = kernelRows.length > 0 && onKernelPick !== undefined;
+     const cardWidth = Math.max(24, Math.min(columns - 4, 72));
+-    const layout = resolveLaunchpadLayout(columns, rows, {
++    // dsh-usage-limits launchpad-status: the status block takes rows the layout must budget for,
++    // or flexbox squeezes the input card to nothing; it reuses the card's top gap.
++    const statusRows = statusViews.reduce((n, view) => n + view.maxRows, 0) + (statusEntries.length > 0 ? 1 : 0);
++    const layout = resolveLaunchpadLayout(columns, Math.max(1, rows - statusRows), {
+         params: hasParams,
+         whale,
+         whaleGirl,
+@@ -663,7 +671,12 @@
+         onFocusChange(-1);
+         event.stopImmediatePropagation();
+     });
+-    return (_jsxs(Box, { flexDirection: "column", width: columns, height: rows, onClick: onBlankClick, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, alignItems: "center", justifyContent: "center", children: [layout.showHero && (_jsx(LogoV2, { fontId: fontId, whale: layout.showWhale && whale, whaleIdle: whaleIdle, whaleGirl: layout.showWhale && whaleGirl, brand: brand, starred: starred, onStarClick: onStarClick, skipIntro: true, align: "center", chrome: "minimal", arrangement: "column" })), _jsxs(Box, { flexDirection: "column", width: cardWidth, marginTop: layout.heroGapRows, children: [_jsx(Box, { flexDirection: "column", borderStyle: "round", borderColor: inputFocused ? 'suggestion' : 'inactive', paddingX: 1, width: cardWidth, children: _jsx(SearchBox, { query: query, placeholder: t('launchpad-placeholder'), 
++    // dsh-usage-limits launchpad-status: the same block Chat renders above its prompt — rich views in
++    // their error boundary, then the joined text entries — full width and centred, above the card.
++    const statusBlock = statusViews.length > 0 || statusEntries.length > 0
++        ? (_jsxs(Box, { flexDirection: "column", width: columns, alignItems: "center", flexShrink: 0, marginTop: layout.heroGapRows, children: [statusViews.map(view => (_jsx(PluginStatusViewBoundary, { viewKey: view.key, onError: (key, error) => onStatusViewError?.(key, error), children: _jsx(Box, { flexDirection: "column", flexShrink: 0, maxHeight: view.maxRows, overflow: "hidden", children: React.createElement(view.component, { React, ui: statusViewUi }) }) }, `${view.key}:${view.registrationId}`))), statusEntries.length > 0 ? (_jsx(Text, { dimColor: true, wrap: "truncate", children: statusEntries.map(entry => entry.text).join(' · ') })) : null] }))
++        : null;
++    return (_jsxs(Box, { flexDirection: "column", width: columns, height: rows, onClick: onBlankClick, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, alignItems: "center", justifyContent: "center", children: [layout.showHero && (_jsx(LogoV2, { fontId: fontId, whale: layout.showWhale && whale, whaleIdle: whaleIdle, whaleGirl: layout.showWhale && whaleGirl, brand: brand, starred: starred, onStarClick: onStarClick, skipIntro: true, align: "center", chrome: "minimal", arrangement: "column" })), statusBlock, _jsxs(Box, { flexDirection: "column", width: cardWidth, marginTop: statusBlock === null ? layout.heroGapRows : 0, children: [_jsx(Box, { flexDirection: "column", borderStyle: "round", borderColor: inputFocused ? 'suggestion' : 'inactive', paddingX: 1, width: cardWidth, children: _jsx(SearchBox, { query: query, placeholder: t('launchpad-placeholder'), 
+                                     // 第七版（用户原话「光标永远不消失 哪怕焦点没了也不消失」）：
+                                     // 只要这一屏在，输入光标**常在**——焦点挪到参数段/入口行只影响
+                                     // 外框提亮（inputFocused），不再当光标的开关。

@@ -59,8 +59,10 @@ environment variable named by `proxy.apiKeyEnv` (default `PROVIDERPROXY_API_KEY`
 ### Windows
 
 Each usage window has a percent (integer 0–100), an optional reset time, a **span** (window length
-in seconds, or unknown) and a **scope** (shared, or a named model/limit). A window is a **line
-window** when it is shared and its span is 18,000 s (`5h`) or 604,800 s (`7d`). Spans come from
+in seconds, or unknown) and a **scope** (shared, or a named model/limit). An account's **line
+windows** are its first shared window with a span of 18,000 s (`5h`) and its first shared window with
+a span of 604,800 s (`7d`); a later shared window of the same span (which no current payload carries)
+is shown only in the web panel. The report marks exactly these windows with `short`. Spans come from
 the payload: Claude `session`/`five_hour` = 5h, `weekly_all`/`seven_day` = 7d, `weekly_scoped`
 and `seven_day_<model>` are scoped; Codex windows carry `limit_window_seconds`, and
 `additional_rate_limits` and the spend limit are scoped. A window whose reset time has passed shows
@@ -78,8 +80,9 @@ An account is **shown** when it has data (fresh or stale) and at least one line 
 **hidden** (renders nothing) when no account is shown, including before the first data arrives.
 Unknown or failed accounts are never rendered as 0%.
 
-Formats, for available width W = terminal columns − 4. The first tier whose plain-text width
-is ≤ W is used:
+Formats, for available width W = the content width dsh-TUI gives the status area: terminal columns
+minus its page margin (2 columns each side at the default `normal` margin, so W = columns − 4) and
+minus a split side panel. The first tier whose plain-text width is ≤ W is used:
 
 | Tier | Account | Window | Separator between accounts |
 |---|---|---|---|
@@ -167,7 +170,7 @@ lib/report.js     states → UsageReport (severity 50/80, short, span, headline 
 lib/accounts.js   config → ordered account list (proxy first), timing policy
 lib/source.js     shared core: credentials, throttled fetches, in-flight sharing, redaction → report
 lib/line.js       report + now + width → styled segments (tiers 0–5)
-index.js          web host half: GET /api/usage-limits (inject connection; credentials optional)
+index.js          web host half: GET /api/usage-limits (inject connection, credentials)
 client.js         web client: ring + panel (slot conversation.composer.dock)
 tui.js            dst half: inject tuiStatus; credentials optional; registerView key `usage-limits`
 ```
@@ -182,7 +185,7 @@ tui.js            dst half: inject tuiStatus; credentials optional; registerView
   useTerminalSize } }`; `Text` accepts `color: 'ansi256(n)'`, `bold`, `dimColor`. Chat renders views
   above the prompt while no preview is active. If `registerView` is refused, the plugin falls back to
   `ctx.tuiStatus.set('usage-limits', plainText)` (host renders it dim, uncoloured); the text is the
-  line for W = (stdout columns, or 204) − 4.
+  line for W = (stdout columns, or 204) − 4 (the default page margin).
 - Launchpad: dsh-TUI 0.14.0 renders no status contributions there. nix-config
   `pkgs/dsh-tui/launchpad-status.patch` passes Chat's status entries and views to `Launchpad` and renders
   them, inside the same error boundary, in a full-width centred row above the input card. Its build

@@ -1,6 +1,6 @@
 # dsh-usage-limits: product and technical specification
 
-Version 0.2.0 (October 11, 2026). Supersedes the web-only behaviour of 0.1.0 where noted.
+Version 0.2.1 (October 11, 2026). Supersedes the web-only behaviour of 0.1.0 where noted.
 
 ## 1. Product
 

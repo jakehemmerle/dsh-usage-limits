@@ -72,3 +72,72 @@ Environment: `DSH_TUI_DIR` selects the dsh-TUI build (the patched build for Laun
   read a plugin that never fetched as correctly hidden; `boot()` now asserts every reachable account
   is requested after start (U5 liveness), and both fail.
 - `web.e2e` (`E2E_RUNS=1 SEED=1`): 3/3 fail (headline text, thresholds, account order, U11).
+
+### Green
+
+- `npm test` (`NUM_RUNS=300 HOST_RUNS=60 CMUX_RUNS=30`, patched dsh-TUI): 74/74.
+- Defects the suites found while going green, each now a named regression that fails first:
+  - **Width**: dsh-TUI hands status views the content width inside its page margin; the plugin had
+    subtracted another 4 columns, so a 146-cell line dropped a tier at 150 columns.
+  - **Launchpad input collapse** (first `launchpad-status` cut): the status row was not in the Launchpad's
+    row budget, so flexbox squeezed the input card to zero height and typing never echoed. The patch
+    budgets the rows; the install check renders the real Launchpad chrome at 38 rows.
+  - **Duplicate 5h windows** (web campaign seed 11): the headline counted a second shared 5h window that the
+    dst line never shows. Only an account's first shared 5h and 7d windows are line windows
+    (`proxy.test.js` regression).
+  - **Narrow Launchpad** (release campaign seeds 101–404): at about 60 columns the stock 0.14.0 Launchpad
+    already collapses its input row (its tips and corners wrap past the row budget), and the usage line
+    also displaced the parameter row. The status block now yields first and the input card never shrinks
+    (`regression (release campaign seeds 101-404)` in `tui.e2e`, and nix-config's install check at 60/72
+    columns, both failing on the previous build).
+  - Harness: U12 compares parsed `llm-pi-ai/*` records (dsh web adds its own record and re-renders the
+    YAML); web cases enter a session (dsh web 0.2.1-alpha.2 mounts the composer dock only there).
+
+### Release campaign (patched dsh-TUI `krwd30f1…`, identical `lib/` to the installed `aghgnwnr…`)
+
+| Surface | Seeds | Cases | Result |
+|---|---|---|---|
+| dst (real dsh-TUI in tmux) | 101, 202, 303, 404, 505 | 100 (20 per seed, 1–12 actions) | all pass |
+| dsh web (Playwright) | 101, 202, 303, 404, 505 | 100 (20 per seed, 1–12 actions) | all pass |
+
+dst transition coverage over the 100 cases: set 194 (ok 120, status 24, malformed 28, hang 22), grant 101
+(valid 29, expired 32, absent 40), submit 111, busy turn 44, restart 59, resize 85, idle 53; line shown
+after 506 steps (Launchpad 247, chat 259) and hidden after 141 (Launchpad 74, chat 67).
+
+Web transition coverage over the 100 cases: set 297 (ok 189, status 30, malformed 35, hang 43), grant 151
+(valid 62, expired 43, absent 46), reload 79, viewport 67 (390/820/1280 px), idle 74; after each step the
+trigger showed a headline 580 times, `Usage` 72 times and was hidden 16 times.
+
+### Mutations (isolated copy; each planted alone, then restored)
+
+| Mutant | Killed by |
+|---|---|
+| M1 critical at > 80 instead of ≥ 80 | contract and client thresholds; real dst "Launchpad then chat", "narrow terminals" |
+| M2 5h and 7d swapped on the line | host-runtime U1/U2, line properties, cmux differential; real dst "/model", "Launchpad then chat", "narrow terminals" |
+| M3 poll interval not cleared on unload | host-runtime U10, smoke |
+| M4 a failed refresh wipes good data | host-runtime U4/U6, route and proxy properties; real dst "failure keeps data stale" |
+| M5 web trigger shows the long label | client tests; real web "ring and panel", U11 |
+| M6 countdown tick requests a refresh | survived at first (the throttle hid it); host-runtime U5 now fires a tick after every interval has elapsed and kills it |
+
+Caught 6/6 after strengthening U5.
+
+### Installed artifact (work Mac, nix-config `5e9f96d`, Home Manager generation 40; rollback 39)
+
+- `pkgs/dsh-usage-limits` → `/nix/store/w4lbz9c1…-dsh-usage-limits-0.2.0`, byte-identical to this repo's
+  runtime files; dst links `/nix/store/aghgnwnr…-dsh-tui-0.14.0` (launchpad-status applied).
+- Real dst e2e examples with `PLUGIN_DIR` = the installed store path and the dst profile's dsh-TUI: all
+  pass, including the 60-column regression.
+
+### Live checks on the work Mac (real profile and accounts)
+
+- dsh web (restarted on the new build): the route returns all four accounts. Through cua-driver's typed
+  browser tools (driver-owned isolated Chrome, CDP capture): the composer dock reads `Claude 7d 100%` in
+  the critical colour; the panel lists Claude (proxy) 5-hour 3%, Weekly 39%, Fable 0%; Codex (proxy,
+  Promax) Weekly 0%; Claude 5-hour 0%, Weekly 100% (red bar), Fable 3%; Codex Weekly 7%; resets shown.
+- dst (real `dst`, real HOME, private tmux socket): the Launchpad shows
+  `Claude (proxy) 5h ░░░░░░░░ 3% ↻3h38m 7d ███░░░░░ 39% ↻4d23h   Codex (proxy) 7d ░░░░░░░░ 0% ↻6d9h   Claude 5h ░░░░░░░░ 0% 7d ████████ 100% ↻1d18h   Codex 7d █░░░░░░░ 7% ↻6d21h`
+  at 200 columns (100% in colour 160, the rest 28) and tier 3 at 120 columns.
+- cua-driver on Terminal: blocked; the Mac's screen was locked (capture black, no AX windows).
+- Found on the way: the user agenix secrets in `$TMPDIR/agenix.d/2` had been purged by macOS's temp
+  cleaner, so a newly started dsh had no `PROVIDERPROXY_API_KEY` and the proxy accounts read signed
+  out; re-running `org.nix-community.home.activate-agenix` restored them (generation 3).

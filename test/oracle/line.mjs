@@ -72,7 +72,7 @@ function renderTier(shown, tier, now) {
 }
 
 /**
- * Expected dst line. Returns null when hidden. `width` is W = columns - 4.
+ * Expected dst line. Returns null when hidden. `width` is W (dsh-TUI's content width).
  * { text, tier, cells: [{ text: '<bar> <p>%' | '<p>%', severity }] }
  */
 export function expectedLine(accounts, now, width) {

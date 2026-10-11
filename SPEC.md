@@ -58,7 +58,9 @@ environment variable named by `proxy.apiKeyEnv` (default `PROVIDERPROXY_API_KEY`
 
 ### Windows
 
-Each usage window has a percent (integer 0–100), an optional reset time, a **span** (window length
+Each usage window has a percent (integer 0–100: the payload's percentage rounded to the nearest
+integer, halves up, then clamped; Anthropic's legacy `utilization` is a percentage exactly like
+`limits[].percent` and Codex `used_percent`, so 0.9 shows 1%, never 90%), an optional reset time, a **span** (window length
 in seconds, or unknown) and a **scope** (shared, or a named model/limit). An account's **line
 windows** are its first shared window with a span of 18,000 s (`5h`) and its first shared window with
 a span of 604,800 s (`7d`); a later shared window of the same span (which no current payload carries)
@@ -150,6 +152,7 @@ or log, even if an upstream echoes it.
 | U10 | Unload removes the line, timers and requests | Request log after unload | — (page reload covers web client) | Host-runtime unload; no requests after |
 | U11 | Web headline and `dst` line agree (same accounts, windows, percents, severities) | Oracle applied to one scenario | Trigger text | Line text |
 | U12 | Stored sign-ins are never modified | Credentials file bytes before/after | Same | Same |
+| U13 | Displayed percent = payload percentage rounded and clamped, the same for every payload shape (Claude `limits[]`, legacy `utilization`, Codex `used_percent`); monotone in the payload value | Nearest-integer rule written from this spec | Panel percent | Line percent |
 
 ## 2. Technical
 

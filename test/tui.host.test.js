@@ -160,6 +160,14 @@ test('U5: rendering, 30 s ticks and resizes cause no request; proxy every 60 s, 
     intervals.fire(POLL);
     await host.quiet();
     assert.deepEqual(counts(), [3, 3, 2, 2]);
+    // Every interval has elapsed: a countdown tick still must not request (only the poll may).
+    clock.advance(10 * 60_000);
+    intervals.fire(TICK);
+    await host.quiet();
+    assert.deepEqual(counts(), [3, 3, 2, 2], 'a tick redraws without a request even when every throttle is open');
+    intervals.fire(POLL);
+    await host.quiet();
+    assert.deepEqual(counts(), [4, 4, 3, 3]);
   } finally {
     await host.unload();
     await host.unmount();

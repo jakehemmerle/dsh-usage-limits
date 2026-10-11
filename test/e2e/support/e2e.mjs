@@ -8,6 +8,8 @@ import { startMockUpstream } from './mock-upstream.mjs';
 import { ACCOUNTS, grant, representable } from './scenario.mjs';
 
 export const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
+/** Where the plugin entries load from: the repo, or an installed build (PLUGIN_DIR=/nix/store/…-dsh-usage-limits-0.2.0/). */
+export const PLUGIN_DIR = process.env.PLUGIN_DIR ? `${process.env.PLUGIN_DIR.replace(/\/+$/, '')}/` : ROOT;
 export const PROXY_ENV = 'USAGE_TEST_PROXY_KEY';
 export const TIMING = { pollMs: 700, tickMs: 500, floorMs: 300, timeoutMs: 1500, maxBackoffMs: 1500 };
 /** dsh-TUI's default page margin (`normal`: 2 columns each side): W = columns - 4 in a real dst. */
@@ -37,7 +39,7 @@ export async function startCase({ kind, proxyKey = true, grants = {}, responses 
     mock,
     plugins: [{
       id: 'usage-limits',
-      name: `${ROOT}${entry ?? (kind === 'tui' ? 'tui.js' : 'index.js')}`,
+      name: `${PLUGIN_DIR}${entry ?? (kind === 'tui' ? 'tui.js' : 'index.js')}`,
       // Production uses 300000 / 60000 (checked with a fake clock in tui.host.test.js); the real
       // clients here run on short intervals so a generated case finishes in seconds.
       config: {

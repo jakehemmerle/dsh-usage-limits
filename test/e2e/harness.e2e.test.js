@@ -6,13 +6,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { startMockLlm } from '../rig/mock-llm.mjs';
-import { makeProfile, startTui, startWeb } from '../rig/rig.mjs';
+import { makeProfile, paths, startTui, startWeb } from '../rig/rig.mjs';
 import { startMockUpstream } from './support/mock-upstream.mjs';
 import { ROOT } from './support/e2e.mjs';
 
 const PROBE = `${ROOT}test/e2e/support/probe-status.mjs`;
-const patched = existsSync(process.env.DSH_TUI_DIR ?? '/nonexistent')
-  && readFileSync(join(process.env.DSH_TUI_DIR, 'lib/types/screens/Launchpad.js'), 'utf8').includes('dsh-usage-limits launchpad-status');
+// Whether the dsh-TUI the rig mounts (DSH_TUI_DIR, else the installed dst profile's) carries the patch.
+const tuiDir = paths().tui;
+const patched = tuiDir !== null && existsSync(tuiDir)
+  && readFileSync(join(tuiDir, 'lib/types/screens/Launchpad.js'), 'utf8').includes('dsh-usage-limits launchpad-status');
 
 test('harness: dst loads a probe view; it shows in chat with its colour, on the Launchpad only when patched', async () => {
   const mock = await startMockLlm({ script: () => ({ text: 'turn finished' }) });

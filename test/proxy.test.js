@@ -125,3 +125,15 @@ test('regression (web campaign seed 11): only the first shared 5h/7d window is a
   assert.deepEqual(windows.map((w) => [w.percent, w.short]), [[12, '5h'], [31, null]]);
   assert.deepEqual([report.headline.name, report.headline.short, report.headline.percent], ['Claude (proxy)', '5h', 18]);
 });
+
+test('regression (web flake run 1, seed 951): a 5h/7d tie goes to 5h even when the payload lists the weekly window first', async () => {
+  const claude = JSON.parse(fixture('anthropic-oauth-usage.json'));
+  const weekly = claude.limits.find((l) => l.kind === 'weekly_all');
+  const session = claude.limits.find((l) => l.kind === 'session');
+  weekly.percent = 2;
+  session.percent = 2;
+  claude.limits = [weekly, session];
+  const host = mountProxy({ upstream: (request) => reply(200, request.url.endsWith('/usage/claude') ? JSON.stringify(claude) : fixture('codex-wham-usage.json')) });
+  const report = await host.get();
+  assert.deepEqual([report.headline.name, report.headline.short, report.headline.percent], ['Claude (proxy)', '5h', 2]);
+});

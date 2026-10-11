@@ -77,13 +77,17 @@ export function assertProvider(entry, expected, where) {
   assert.equal(new Set(ids).size, ids.length, `${where}: unique window ids ${JSON.stringify(ids)}`);
 }
 
-/** The fullest line window (5h/7d, shared) over ok/stale entries; else the fullest window of any kind. */
+/**
+ * The fullest line window (5h/7d, shared) over ok/stale entries — ties to the earlier account, then 5h
+ * before 7d (SPEC) — else the fullest window of any kind in report order.
+ */
 export function expectedHeadline(report) {
+  const lineOrder = (windows) => [...windows.filter((w) => w.short === '5h'), ...windows.filter((w) => w.short === '7d'), ...windows.filter((w) => w.short === null)];
   const pick = (accept) => {
     let best = null;
     for (const entry of report.providers) {
       if (entry.status !== 'ok' && entry.status !== 'stale') continue;
-      for (const window of entry.windows) {
+      for (const window of lineOrder(entry.windows)) {
         if (!accept(window)) continue;
         if (best === null || window.percent > best.percent) {
           best = {

@@ -21,7 +21,8 @@ test('harness: dst loads a probe view; it shows in chat with its colour, on the 
   const p = makeProfile({ kind: 'tui', mock, plugins: [{ id: 'probe-status', name: PROBE, config: {} }], env: { PROBE_ENV: 'forwarded' } });
   const tui = startTui(p, { cols: 140, rows: 40 });
   try {
-    assert.match((await p.dumpConfig()).stdout, /probe-status/);
+    const dump = await p.dumpConfig();
+    assert.match(dump.stdout, /probe-status/, `dump-config: status ${dump.status} signal ${dump.signal}; stderr tail: ${dump.stderr.slice(-800)}`);
     await tui.waitFor(/Mock Alpha|mock-alpha/, { timeout: 60000 });
     await new Promise((resolve) => setTimeout(resolve, 1500));
     assert.equal(/PROBE-STATUS-VIEW/.test(tui.capture()), patched, `Launchpad shows the probe: ${patched}`);

@@ -121,7 +121,7 @@ trigger showed a headline 580 times, `Usage` 72 times and was hidden 16 times.
 
 Caught 6/6 after strengthening U5.
 
-### Installed artifact (work Mac, nix-config `5e9f96d`, Home Manager generation 40; rollback 39)
+### Installed artifact (work Mac; first nix-config `5e9f96d`, generation 40, rollback 39)
 
 - `pkgs/dsh-usage-limits` → `/nix/store/w4lbz9c1…-dsh-usage-limits-0.2.0`, byte-identical to this repo's
   runtime files; dst links `/nix/store/aghgnwnr…-dsh-tui-0.14.0` (launchpad-status applied).
@@ -141,3 +141,30 @@ Caught 6/6 after strengthening U5.
 - Found on the way: the user agenix secrets in `$TMPDIR/agenix.d/2` had been purged by macOS's temp
   cleaner, so a newly started dsh had no `PROVIDERPROXY_API_KEY` and the proxy accounts read signed
   out; re-running `org.nix-community.home.activate-agenix` restored them (generation 3).
+
+### Found after the first rollout (each a failing regression first)
+
+- **Headline tie** (web repeat loop, run 1, seed 951): when a payload listed the weekly window before the
+  5-hour one at equal percents, the web headline said 7d while the dst line's tie-break (and SPEC) says
+  5h. The contract helper had copied the same order. Fixed in 0.2.1 (`proxy.test.js` regression).
+- **Proxy timeout** (live, personal Mac, right after activation): `Codex (proxy)` read
+  `timed out after 10 s`. ProviderProxy gives its upstream 30 s and caches nothing for a caller that gave
+  up, so a slow ChatGPT usage call could keep timing out. ProviderProxy requests now wait 35 s; direct
+  sign-in endpoints keep 10 s (0.2.2; mock-timer regressions for both).
+- **Harness**: the probe test decided "patched" from `DSH_TUI_DIR` only and failed on the installed dst
+  profile (deterministic, all five runs); it now reads the dsh-TUI the rig mounts. One web-loop run saw
+  `--dump-config` print nothing once (not reproduced; the assertion now reports exit status and stderr).
+
+### Deployment (dsh-usage-limits `8c10538` = 0.2.2, nix-config `2db2ca1`)
+
+| Host | Revision | Rows (web / dst) | Launchpad patch | Live check |
+|---|---|---|---|---|
+| work (work Mac) | `2db2ca1`, HM generation 42 (rollback 41) | 0.2.2 / 0.2.2 | yes | dsh-web restarted: 4 accounts ok, headline `Claude 7d 100%`; real dst Launchpad line (above); installed-artifact e2e |
+| mbp | `2db2ca1` | 0.2.2 / 0.2.2 | yes | dsh-web restarted (idle): proxy accounts ok, headline `Claude (proxy) 7d 39%` |
+| fw13 | `2db2ca1` | 0.2.2 / 0.2.2 | yes | dsh-web restarted (idle): same; 0 failed units |
+| gpu | `2db2ca1` (provisioning guard used; inactive after, timestamps unchanged) | 0.2.2 / 0.2.2 | yes | 0 failed units; dsh-web not restarted (sessions active), still serving 0.1.0 until its next restart; dst shows dsh-TUI's first-run guide (never run there) |
+
+### Repeat runs on the installed 0.2.2 (`/nix/store/rj75p6g7…-dsh-usage-limits-0.2.2`, installed dst dsh-TUI)
+
+Five consecutive runs of each real-client file (examples plus a 3-case campaign, seeds 1301–1305 for dst
+and 1401–1405 for web): dst 9/9 every run, web 3/3 every run.

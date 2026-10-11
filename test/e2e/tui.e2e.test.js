@@ -12,7 +12,7 @@ import { ACCOUNTS } from './support/scenario.mjs';
 import { startCase, observedAccounts, secretsOf, awaitRequest, reachable, fcOptions, MARGIN } from './support/e2e.mjs';
 
 const USAGE_ROW = /(Claude|Codex)( \(proxy\)|·px)? (5h|7d) /;
-const LAUNCHPAD = /Mock Alpha|mock-alpha/;
+const LAUNCHPAD = /Mock (Alpha|Beta)|mock-(alpha|beta)/;
 
 /** Runs of a row whose 256-colour foreground is a severity colour, from tmux `capture-pane -e`. */
 function colouredRuns(ansiRow) {
@@ -149,17 +149,26 @@ test('/model switch and restart: the line survives the session fork and comes ba
     await expectScreen(c, tui, 160, 'Launchpad');
     await tui.submit('first', { until: () => c.mock.turns().length > 0 });
     await tui.waitFor(/turn finished/);
+    // dsh-TUI 0.14.0's built-in picker: providers (Recently used, DeepSeek, Mock), then models.
     tui.text('/model');
     await tui.waitFor(/\/model/);
     await sleep(300);
     tui.keys('Enter');
-    await tui.waitFor(/Mock Beta/);
-    await sleep(300);
-    tui.keys('Down');
-    await sleep(200);
+    await tui.waitFor(/Enter to view models/);
+    for (let i = 0; i < 6 && !/❯ Mock/.test(tui.capture()); i += 1) {
+      tui.keys('Down');
+      await sleep(200);
+    }
+    assert.match(tui.capture(), /❯ Mock/);
     tui.keys('Enter');
-    await sleep(800);
-    tui.keys('Escape');
+    await tui.waitFor(/Mock Beta/);
+    for (let i = 0; i < 4 && !/❯ .*Mock Beta/.test(tui.capture()); i += 1) {
+      tui.keys('Down');
+      await sleep(200);
+    }
+    tui.keys('Enter');
+    await tui.waitFor(/mock-beta/);
+    assert.equal(c.profile.readTui('model.json')?.model, 'mock-beta', 'the switch took effect');
     await expectScreen(c, tui, 160, 'after /model');
     await tui.kill();
     tui = await boot(c, 160);

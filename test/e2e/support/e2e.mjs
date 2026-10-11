@@ -10,6 +10,7 @@ import { ACCOUNTS, grant, representable } from './scenario.mjs';
 export const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 export const PROXY_ENV = 'USAGE_TEST_PROXY_KEY';
 export const TIMING = { pollMs: 700, tickMs: 500, floorMs: 300, timeoutMs: 1500, maxBackoffMs: 1500 };
+/** dsh-TUI's default page margin (`normal`: 2 columns each side): W = columns - 4 in a real dst. */
 export const MARGIN = 4;
 
 let serial = 0;
@@ -51,6 +52,8 @@ export async function startCase({ kind, proxyKey = true, grants = {}, responses 
       ...(proxyKey ? { [PROXY_ENV]: secrets.proxy } : {}),
     },
     credentials: records(),
+    // The managed web profile acknowledges the preview notice the same way (home/dsh.nix).
+    rows: kind === 'web' ? [{ id: 'ui-settings-general', name: '@deepseek-ai/dsh-client-ui-settings-general', config: { welcomeNoticeVersion: '2026-09-28.1' } }] : [],
   });
   const handle = {
     mock, upstream, profile, state, secrets,
@@ -89,8 +92,24 @@ function recordsFor(grants, secrets) {
 }
 
 import { readFileSync } from 'node:fs';
+/**
+ * The DSH sign-in records (`llm-pi-ai/*`) in a credentials file, parsed, as a stable JSON string.
+ * dsh itself adds other records (dsh web's browser session) and re-renders the YAML layout, so U12
+ * compares these values, not the file's bytes. Each record is a flow map, which is valid JSON.
+ */
 function readCredentials(file) {
-  try { return readFileSync(file, 'utf8'); } catch { return null; }
+  let text;
+  try { text = readFileSync(file, 'utf8'); } catch { return null; }
+  const records = {};
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = /^  (llm-pi-ai\/[\w-]+):\s*(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    let body = m[2];
+    for (let j = i + 1; j < lines.length && /^\s{3,}/.test(lines[j]); j += 1) body += lines[j];
+    records[m[1]] = JSON.parse(body);
+  }
+  return JSON.stringify(Object.keys(records).sort().map((k) => [k, records[k]]));
 }
 
 /** Whether the plugin can reach this account right now. */

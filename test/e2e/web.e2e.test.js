@@ -137,6 +137,12 @@ async function open(c, { viewport = { width: 1280, height: 860 }, colorScheme = 
   try {
     await page.goto(web.url);
     await page.waitForLoadState('networkidle').catch(() => {});
+    // dsh web mounts the composer dock (where the ring lives) in session views: start one.
+    const composer = page.getByLabel(/commands, @ files or sessions/);
+    await composer.click();
+    await page.keyboard.type('hello');
+    await page.keyboard.press('Enter');
+    await page.getByText('turn finished').first().waitFor({ timeout: 30000 });
     // U5 liveness: the page's first report requests every reachable account (the log oracle alone
     // would accept a plugin that never fetches).
     for (const account of ACCOUNTS.filter((a) => reachable(c, a))) {

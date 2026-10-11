@@ -90,7 +90,8 @@ test('U1/U2/U3/U7: after the first load the rendered line equals the spec line, 
       env: s.proxyKey ? { PROVIDERPROXY_API_KEY: PROXY_KEY } : {},
     });
     try {
-      const want = expectedLine(shownAfterLoad(s), clock.now(), s.cols - 4);
+      // No PageMargin in this harness: the view gets the whole width (in dst, W = columns - page margin).
+      const want = expectedLine(shownAfterLoad(s), clock.now(), s.cols);
       await host.until(() => (want === null ? true : host.line().join('').trim() === want.text));
       await host.quiet();
       const rows = host.line();
@@ -100,7 +101,7 @@ test('U1/U2/U3/U7: after the first load the rendered line equals the spec line, 
       }
       assert.equal(rows.length, 1, 'one row');
       assert.equal(rows[0].trim(), want.text);
-      assert.ok([...rows[0].trimEnd()].length <= s.cols - 4, 'within W');
+      assert.ok([...rows[0].trimEnd()].length <= s.cols, 'within W');
       assert.deepEqual(colouredRuns(host.cells(0)), want.cells.map((c) => ({ text: c.text, fg: COLOUR[c.severity] })));
     } finally {
       await host.unload();
@@ -184,12 +185,13 @@ test('U4/U6: a failure keeps the data and marks it stale; success clears it; cou
     clock.advance(31_000);
     intervals.fire(TICK);
     await host.until(() => host.line().join('').trim() === 'Claude (proxy) 5h ████░░░░ 55% ↻1h27m stale');
-    const before = upstream.calls.length;
+    const before = upstream.callsFor('providerproxy/anthropic').length;
     clock.advance(10 * 60_000);
     upstream.set('providerproxy/anthropic', { kind: 'ok', windows: [{ span: 18000, scoped: false, percent: 81, resetsAt: T0 + 300 * 60_000 }] });
     intervals.fire(POLL);
     await host.until(() => host.line().join('').trim() === 'Claude (proxy) 5h ██████░░ 81% ↻4h47m');
-    assert.equal(upstream.calls.length, before + 1);
+    // Ticks fetched nothing; the poll fetched this account exactly once.
+    assert.equal(upstream.callsFor('providerproxy/anthropic').length, before + 1);
   } finally {
     await host.unload();
     await host.unmount();

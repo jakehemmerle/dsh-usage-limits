@@ -137,3 +137,39 @@ test('regression (web flake run 1, seed 951): a 5h/7d tie goes to 5h even when t
   const report = await host.get();
   assert.deepEqual([report.headline.name, report.headline.short, report.headline.percent], ['Claude (proxy)', '5h', 2]);
 });
+
+test('regression (live, mbp): a proxy answer after 15 s is applied; ProviderProxy allows its upstream 30 s and caches nothing for a caller that gave up', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const slow = (body) => new Promise((resolve) => { setTimeout(() => resolve(reply(200, body)), 15_000); });
+  const host = mountProxy({ upstream: (request) => slow(request.url.endsWith('/usage/claude') ? fixture('anthropic-oauth-usage.json') : fixture('codex-wham-usage.json')) });
+  const pending = host.get();
+  for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  t.mock.timers.tick(15_000);
+  const report = await pending;
+  assert.deepEqual(report.providers.slice(0, 2).map((p) => [p.provider, p.status]), [
+    ['providerproxy/anthropic', 'ok'], ['providerproxy/openai-codex', 'ok'],
+  ]);
+});
+
+test('a direct sign-in endpoint still times out after 10 s', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { signedInRecords } = await import('./support/host.js');
+  let route;
+  const plugin = createPlugin({
+    fetch: (input) => new Promise((resolve) => { setTimeout(() => resolve(reply(200, String(input).includes('anthropic') ? fixture('anthropic-oauth-usage.json') : fixture('codex-wham-usage.json'))), 15_000); }),
+    now: () => Date.parse('2026-10-06T15:00:00Z'),
+    env: () => ({}),
+  });
+  const records = signedInRecords();
+  plugin.apply({
+    connection: { fetch: { register(entry) { route = entry; } } },
+    credentials: { async readRecord(key) { return records[key]; } },
+    effect() {},
+  }, {});
+  const pending = route.fetch(new Request('http://x/api/usage-limits')).then((r) => r.json());
+  for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  t.mock.timers.tick(15_000);
+  const report = await pending;
+  assert.deepEqual(report.providers.map((p) => [p.provider, p.status]), [['anthropic', 'error'], ['openai-codex', 'error']]);
+  assert.match(report.providers[0].reason, /timed out after 10 s/);
+});

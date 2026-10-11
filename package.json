@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-usage-limits",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "description": "Claude and Codex plan usage: omp-style line in dst, ring meter in dsh web.",
   "type": "module",

@@ -1,6 +1,6 @@
 # dsh-usage-limits: product and technical specification
 
-Version 0.2.1 (October 11, 2026). Supersedes the web-only behaviour of 0.1.0 where noted.
+Version 0.2.2 (October 11, 2026). Supersedes the web-only behaviour of 0.1.0 where noted.
 
 ## 1. Product
 
@@ -108,7 +108,9 @@ minus a split side panel. The first tier whose plain-text width is ≤ W is used
 **Timing.** Data is requested immediately on load and then every 60 s; each ProviderProxy account
 reaches the proxy at most once per 60 s (the proxy caches upstream for 60 s), each direct sign-in at
 most once per `minIntervalMs` (default 5 min, floor 1 min), with exponential back-off after failures.
-Reset countdowns re-render every 30 s without a request. Rendering never starts a request.
+Reset countdowns re-render every 30 s without a request. Rendering never starts a request. A
+request gives up after 35 s for ProviderProxy (which allows its upstream 30 s and caches nothing for a
+caller that gave up) and 10 s for a direct sign-in endpoint.
 
 **Lifecycle.** The line survives busy turns, `/model` switches and session changes (it is
 process-wide, not per session); a restart starts empty and shows data once fetched. Unloading the

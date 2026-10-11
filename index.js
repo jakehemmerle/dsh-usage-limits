@@ -24,7 +24,7 @@ export function createPlugin(deps) {
       fetch: deps.fetch,
       now: deps.now,
       env,
-      timeoutMs: deps.timeoutMs ?? timing.timeoutMs,
+      timeoutMs: deps.timeoutMs,
       readRecord: (key) => ctx.credentials.readRecord(key),
     });
 

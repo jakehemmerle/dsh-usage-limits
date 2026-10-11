@@ -73,7 +73,6 @@ export function createTuiPlugin(deps) {
       fetch: deps.fetch,
       now: deps.now,
       env,
-      timeoutMs: timing.timeoutMs,
       readRecord: async (key) => (credentials === null ? undefined : credentials.readRecord(key)),
     });
     const store = createLineStore(deps.now);

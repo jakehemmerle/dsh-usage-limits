@@ -70,6 +70,9 @@ export function assertProvider(entry, expected, where) {
   assert.ok(Number.isInteger(entry.fetchedAt), `${where}: fetchedAt`);
   assert.ok(Array.isArray(entry.windows), `${where}: windows`);
   entry.windows.forEach((window, i) => assertWindow(window, `${where}.windows[${i}]`));
+  for (const short of ['5h', '7d']) {
+    assert.ok(entry.windows.filter((window) => window.short === short).length <= 1, `${where}: at most one ${short} line window`);
+  }
   const ids = entry.windows.map((window) => window.id);
   assert.equal(new Set(ids).size, ids.length, `${where}: unique window ids ${JSON.stringify(ids)}`);
 }

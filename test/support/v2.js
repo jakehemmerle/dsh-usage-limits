@@ -45,6 +45,12 @@ export function v2Report(entries, now) {
       return { ...w, id };
     });
     const data = { plan: e.plan ?? null, windows, fetchedAt: now - 1000 };
+    const seenShort = new Set();
+    for (const w of windows) {
+      if (w.short === null) continue;
+      if (seenShort.has(w.short)) w.short = null;
+      else seenShort.add(w.short);
+    }
     providers.push(e.status === 'stale' ? { ...head, status: 'stale', reason: 'Usage endpoint unavailable (HTTP 503)', ...data } : { ...head, status: 'ok', ...data });
   }
   return { generatedAt: now, providers };

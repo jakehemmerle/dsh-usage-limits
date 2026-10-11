@@ -277,7 +277,7 @@ window.__ModuleLoader__.load({
               strokeDasharray: `${(CIRCUMFERENCE * percent) / 100} ${CIRCUMFERENCE}`,
               transform: 'rotate(-90 7 7)',
             })),
-          h('span', null, headline === null ? 'Usage' : `${headline.name} ${headline.percent}%`)),
+          h('span', null, headline === null ? 'Usage' : `${headline.name} ${headline.short ?? headline.label} ${headline.percent}%`)),
           open
             ? ReactDOM.createPortal(
               h(UsagePanel, { report, now: Date.now(), panelRef, style: position ?? { visibility: 'hidden', left: 0, top: 0 } }),

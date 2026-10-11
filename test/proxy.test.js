@@ -108,3 +108,20 @@ test('proxy: proxy.minIntervalMs below 60 s is raised to 60 s', async () => {
   await host.get();
   assert.equal(host.calls.length, 2);
 });
+
+test('regression (web campaign seed 11): only the first shared 5h/7d window is a line window, so the headline matches the dst line', async () => {
+  const codex = {
+    plan_type: 'promax',
+    rate_limit: {
+      primary_window: { used_percent: 12, limit_window_seconds: 18000, reset_after_seconds: 3600 },
+      secondary_window: { used_percent: 31, limit_window_seconds: 18000, reset_after_seconds: 3600 },
+    },
+  };
+  const claude = JSON.parse(fixture('anthropic-oauth-usage.json'));
+  for (const limit of claude.limits) limit.percent = limit.kind === 'session' ? 18 : 0;
+  const host = mountProxy({ upstream: (request) => reply(200, JSON.stringify(request.url.endsWith('/usage/claude') ? claude : codex)) });
+  const report = await host.get();
+  const windows = report.providers.find((p) => p.provider === 'providerproxy/openai-codex').windows;
+  assert.deepEqual(windows.map((w) => [w.percent, w.short]), [[12, '5h'], [31, null]]);
+  assert.deepEqual([report.headline.name, report.headline.short, report.headline.percent], ['Claude (proxy)', '5h', 18]);
+});

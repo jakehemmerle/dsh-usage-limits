@@ -199,6 +199,26 @@ test('narrow terminals: the line degrades by tier and never wraps or overflows',
   }
 });
 
+test('regression (release campaign seeds 101-404): a 60-column Launchpad keeps its input and accepts the first prompt', async () => {
+  const c = await startCase({
+    kind: 'tui',
+    grants: { anthropic: 'valid', 'openai-codex': 'valid' },
+    responses: Object.fromEntries(ACCOUNTS.map((a, i) => [a.id, ok([{ span: 18000, scoped: false, percent: 10 + i, in: 100 }])])),
+  });
+  const tui = await boot(c, 60);
+  try {
+    await expectScreen(c, tui, 60, 'Launchpad at 60 columns');
+    assert.match(tui.capture(), /mock-(alpha|beta)/, 'parameter row');
+    await tui.submit('first prompt', { until: () => c.mock.turns().length > 0 });
+    await tui.waitFor(/turn finished/);
+    await expectScreen(c, tui, 60, 'chat at 60 columns');
+  } finally {
+    await tui.kill();
+    c.profile.dispose();
+    await c.close();
+  }
+});
+
 test('failure keeps data stale, recovery clears it; an echoed secret never shows', async () => {
   const c = await startCase({
     kind: 'tui',

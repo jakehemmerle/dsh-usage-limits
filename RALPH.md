@@ -54,7 +54,12 @@ epic `usage-epic`, steps `usage-s1`..`usage-s9`, bugs `usage-b*`). Every commit 
 - usage-s8: mutants M7 (abort-listener cleanup removed in lib/source.js) and M8 (reset boundary
   <= -> < in lib/report.js) each killed by a named test (new test/source.leak.test.js; tui.host U6);
   lib/ restored byte-identical. Caught 8/8 cumulative (TESTING.md).
-- Web campaign (E2E_RUNS=25 SEED=1, nix browsers 1243): result below.
+- Web campaign (E2E_RUNS=25 SEED=1, nix browsers 1243): 3/3 green (568 s; 25-case campaign 551 s),
+  coverage set 65 / grant 36 / reload 28 / viewport 12 / idle 18; trigger headline 125, usage 25,
+  hidden 9. Round A closed usage-s5, s6, s7, s8; only usage-s9 (release) and the epic remain, held
+  for the next round. Round-A commits: 1437b21 (harness fix), 67ff8d7 (traceability + mutants),
+  809feeb (bookkeeping), on top of the rebased 3711bd8 (s4) and f8f638f (s3) over the concurrent
+  U13 fix 506fd48 pushed by the parallel session (my duplicate 728c570 was dropped in the rebase).
 
 ## Gotchas
 

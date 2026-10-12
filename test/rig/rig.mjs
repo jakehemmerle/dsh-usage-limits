@@ -11,7 +11,10 @@
 // 'tui' (dsh-base + the installed/patched dsh-TUI, symlinked like nix-config).
 // Env overrides: DSH_BIN (launcher), DSH_TUI_DIR (dsh-TUI package to mount).
 //
-// Copied from ~/.agents/skills/new-dsh-plugin/scripts/rig.mjs (October 11, 2026) with two
+// Vendored from nix-config skills/new-dsh-plugin/scripts/rig.mjs at nix-config 2d658d4 (unchanged at
+// 6a7e613); the pristine copy is test/rig/upstream/rig.mjs and every local change is
+// test/rig/rig.local.patch (checked by test/rig.provenance.test.js). Local changes: the private tmux
+// server starts with `-f /dev/null` (never reads the user's tmux.conf), and two
 // additions for dsh-usage-limits: `makeProfile({ env })` adds variables that every dsh
 // process (web, headless and the tmux-launched TUI) receives, and `makeProfile({ credentials })`
 // writes synthetic DSH sign-in records to the profile's `.credentials.yaml`.
@@ -197,7 +200,7 @@ export async function startWeb(profile, { timeout = 90000, args = [] } = {}) {
 /** dsh-TUI in a detached tmux session on a private tmux socket (Jake's own tmux is untouched). */
 export function startTui(profile, { cols = 150, rows = 40, args = [] } = {}) {
   const socket = `dsh-rig-${process.pid}-${Date.now()}`;
-  const tmux = (...a) => execFileSync('tmux', ['-L', socket, ...a], { encoding: 'utf8' });
+  const tmux = (...a) => execFileSync('tmux', ['-L', socket, '-f', '/dev/null', ...a], { encoding: 'utf8' });
   const envs = (profile.forward ?? ['HOME', 'DSH_HOME', 'MOCK_KEY', 'DSH_TELEMETRY_DISABLED', 'PATH'])
     .map((k) => `${k}=${JSON.stringify(profile.env[k] ?? '')}`);
   const cmd = [profile.bin, '--profile', profile.name, ...args].map((a) => JSON.stringify(a)).join(' ');

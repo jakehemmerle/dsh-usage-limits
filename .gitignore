@@ -1,4 +1,5 @@
 node_modules/
+/result
 test/.host/
 
 # Beads / Dolt files (added by bd init)

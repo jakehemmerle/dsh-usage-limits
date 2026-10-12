@@ -1,0 +1,92 @@
+--- upstream/rig.mjs
++++ rig.mjs
+@@ -10,9 +10,17 @@
+ // kind: 'web' (dsh-base + dsh-web-app), 'headless' (dsh-base + dsh-headless),
+ // 'tui' (dsh-base + the installed/patched dsh-TUI, symlinked like nix-config).
+ // Env overrides: DSH_BIN (launcher), DSH_TUI_DIR (dsh-TUI package to mount).
++//
++// Vendored from nix-config skills/new-dsh-plugin/scripts/rig.mjs at nix-config 2d658d4 (unchanged at
++// 6a7e613); the pristine copy is test/rig/upstream/rig.mjs and every local change is
++// test/rig/rig.local.patch (checked by test/rig.provenance.test.js). Local changes: the private tmux
++// server starts with `-f /dev/null` (never reads the user's tmux.conf), and two
++// additions for dsh-usage-limits: `makeProfile({ env })` adds variables that every dsh
++// process (web, headless and the tmux-launched TUI) receives, and `makeProfile({ credentials })`
++// writes synthetic DSH sign-in records to the profile's `.credentials.yaml`.
+ // CLI: `node rig.mjs paths` prints the resolved launcher, store and package dirs.
+ import { spawn, execFileSync } from 'node:child_process';
+-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
++import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+ import { homedir, tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { pathToFileURL } from 'node:url';
+@@ -69,7 +77,7 @@
+  *   rows:    extra patch rows (id-targeted overrides), applied after the base rows
+  *   tuiRow:  dsh-tui row config override (tui only)
+  */
+-export function makeProfile({ kind = 'web', mock, plugins = [], rows = [], bundles, models, tuiRow = {}, seedTui = {} } = {}) {
++export function makeProfile({ kind = 'web', mock, plugins = [], rows = [], bundles, models, tuiRow = {}, seedTui = {}, env: extraEnv = {}, credentials } = {}) {
+   if (!BUNDLES[kind]) throw new Error(`unknown kind ${kind}`);
+   const where = paths();
+   const root = mkdtempSync(join(tmpdir(), `dsh-rig-${kind}-`));
+@@ -99,9 +107,14 @@
+     for (const [file, value] of Object.entries(seed)) writeFileSync(join(home, '.dsh-tui', file), JSON.stringify(value));
+   }
+   writeFileSync(join(dir, 'cordis.patch.yml'), patch);
+-  const env = { ...process.env, HOME: home, DSH_HOME: dshHome, MOCK_KEY: 'mock', DSH_TELEMETRY_DISABLED: '1' };
++  const credentialsFile = join(dshHome, '.credentials.yaml');
++  if (credentials !== undefined) writeCredentials(credentialsFile, credentials);
++  const env = { ...process.env, HOME: home, DSH_HOME: dshHome, MOCK_KEY: 'mock', DSH_TELEMETRY_DISABLED: '1', ...extraEnv };
++  const forward = ['HOME', 'DSH_HOME', 'MOCK_KEY', 'DSH_TELEMETRY_DISABLED', 'PATH', ...Object.keys(extraEnv)];
+   return {
+-    kind, root, home, dshHome, name, dir, work, env, bin: where.bin,
++    kind, root, home, dshHome, name, dir, work, env, forward, credentialsFile, bin: where.bin,
++    /** Replace the profile's DSH sign-in records (dsh-credentials-local reloads on change). */
++    setCredentials(records) { writeCredentials(credentialsFile, records); },
+     /** Every dsh log line written so far (warnings about plugin load failures land here). */
+     logs() {
+       const logDir = join(dshHome, 'logs');
+@@ -117,6 +130,19 @@
+   };
+ }
+ 
++/**
++ * `records`: { 'llm-pi-ai/anthropic': { kind: 'grant', payload: {...} }, ... }. Written as
++ * dsh-credentials-local's version-1 document; JSON is valid YAML for every value.
++ */
++function writeCredentials(file, records) {
++  mkdirSync(join(file, '..'), { recursive: true });
++  const entries = Object.entries(records);
++  const lines = ['version: 1', entries.length === 0 ? 'records: {}' : 'records:'];
++  for (const [key, record] of entries) lines.push(`  ${key}: ${JSON.stringify(record)}`);
++  writeFileSync(`${file}.tmp`, `${lines.join('\n')}\n`, { mode: 0o600 });
++  renameSync(`${file}.tmp`, file);
++}
++
+ function run(profile, args, { timeout = 120000 } = {}) {
+   // Async on purpose: spawnSync would block this process's event loop, and an
+   // in-process mock-llm server could never answer the model call.
+@@ -174,8 +200,9 @@
+ /** dsh-TUI in a detached tmux session on a private tmux socket (Jake's own tmux is untouched). */
+ export function startTui(profile, { cols = 150, rows = 40, args = [] } = {}) {
+   const socket = `dsh-rig-${process.pid}-${Date.now()}`;
+-  const tmux = (...a) => execFileSync('tmux', ['-L', socket, ...a], { encoding: 'utf8' });
+-  const envs = ['HOME', 'DSH_HOME', 'MOCK_KEY', 'DSH_TELEMETRY_DISABLED', 'PATH'].map((k) => `${k}=${JSON.stringify(profile.env[k] ?? '')}`);
++  const tmux = (...a) => execFileSync('tmux', ['-L', socket, '-f', '/dev/null', ...a], { encoding: 'utf8' });
++  const envs = (profile.forward ?? ['HOME', 'DSH_HOME', 'MOCK_KEY', 'DSH_TELEMETRY_DISABLED', 'PATH'])
++    .map((k) => `${k}=${JSON.stringify(profile.env[k] ?? '')}`);
+   const cmd = [profile.bin, '--profile', profile.name, ...args].map((a) => JSON.stringify(a)).join(' ');
+   tmux('new-session', '-d', '-s', 'rig', '-x', String(cols), '-y', String(rows), '-c', profile.work,
+     `env ${envs.join(' ')} TERM=xterm-256color ${cmd}; echo "[[exited $?]]"; sleep 600`);
+@@ -183,7 +210,11 @@
+   // The pane's shell leads its own process group; dsh runs inside it.
+   const panePid = Number(tmux('display-message', '-p', '-t', 'rig', '#{pane_pid}').trim());
+   return {
+-    socket, capture,
++    socket, capture, panePid,
++    /** The screen with SGR colour/attribute escapes (tmux `capture-pane -e`). */
++    captureAnsi: () => tmux('capture-pane', '-p', '-e', '-t', 'rig'),
++    /** Resize the terminal; dsh-TUI re-lays out on SIGWINCH. */
++    resize: (c, r = rows) => tmux('resize-window', '-t', 'rig', '-x', String(c), '-y', String(r)),
+     /** tmux key names: 'Enter', 'Escape', 'M-BSpace' (Option+Backspace), 'C-w', 'BTab' (Shift+Tab), 'M-Left'. */
+     keys: (...keys) => tmux('send-keys', '-t', 'rig', ...keys),
+     /** Literal text, no key-name parsing. */

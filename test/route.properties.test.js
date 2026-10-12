@@ -97,12 +97,13 @@ test('a 200 after good data either reports at least one window from that body or
   }), RUNS);
 });
 
-test('bounds: Anthropic fractional utilization (non-integer <= 1) reads as a fraction of 100', async () => {
-  await fc.assert(fc.asyncProperty(fc.double({ min: 0.001, max: 0.999, noNaN: true }), async (fraction) => {
-    const body = { five_hour: { utilization: fraction, resets_at: new Date(NOW0 + HOUR).toISOString() } };
+// U13 (corrected October 11, 2026; was "reads as a fraction of 100"): utilization is a percentage.
+test('U13 through the route: Anthropic utilization in [0, 1] is a percentage, so it shows 0 % or 1 %', async () => {
+  await fc.assert(fc.asyncProperty(fc.double({ min: 0, max: 1, noNaN: true }), async (value) => {
+    const body = { five_hour: { utilization: value, resets_at: new Date(NOW0 + HOUR).toISOString() } };
     const host = mountHost({ upstream: { anthropic: () => reply(200, JSON.stringify(body)), 'openai-codex': () => reply(200, '{}') } });
     const [window] = windowsOf((await host.get()).body, 'anthropic');
-    assert.equal(window.percent, Math.round(fraction * 100));
+    assert.equal(window.percent, value >= 0.5 ? 1 : 0);
   }), RUNS);
 });
 

@@ -9,7 +9,7 @@ supplement them.
 
 - **U13 red → fix** (percent/fraction bug): red `0dc5019` added `test/normalize.properties.test.js`
   (4 properties, oracle from SPEC, `test/support/fc.js` budget/replay helper); it fails 4/4 at
-  NUM_RUNS=1000 (re-verified at seed 521531315 in a clean worktree of the red commit). Fix `728c570`
+  NUM_RUNS=1000 (re-verified at seed 521531315 in a clean worktree of the red commit). Fix `506fd48`
   drops `toPercent`'s fraction scaling and aligns `route.properties.test.js` with the corrected spec.
 - **Fast suite**: `NUM_RUNS=1000 npm test` — 85/85 pass, fail 0, skipped 0 (host-linked system dsh
   0.2.1-alpha.2 and fleet dsh-TUI 0.14.0; same result inside the Nix sandbox with the flake-built
@@ -55,7 +55,7 @@ node 24.21.0; fast at NUM_RUNS=1000, campaigns at E2E_RUNS=25, SEED=1):
 | U10 unload | test/tui.host.test.js (U10) | host runtime | fast 85/85 |
 | U11 web/dst agree | test/client.test.js (headline); test/e2e/web.e2e.test.js (U11 vs dst oracle) | web + dst oracle | fast 85/85; web e2e 3/3 |
 | U12 credentials untouched | test/e2e/tui.e2e.test.js; test/e2e/web.e2e.test.js (parsed records) | dst + web | dst e2e 7/7; web e2e 3/3 |
-| U13 percent rounding | test/normalize.properties.test.js; test/route.properties.test.js (U13 through the route) | host runtime + route | fast 85/85 (red 0dc5019 → fix 728c570) |
+| U13 percent rounding | test/normalize.properties.test.js; test/route.properties.test.js (U13 through the route) | host runtime + route | fast 85/85 (red 0dc5019 → fix 506fd48) |
 
 ## Reference tests transferred from omp
 

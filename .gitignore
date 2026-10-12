@@ -7,3 +7,4 @@ test/.host/
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+.beads/.auto-import-issues.jsonl

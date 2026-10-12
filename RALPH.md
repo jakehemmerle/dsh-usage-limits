@@ -26,7 +26,7 @@ epic `usage-epic`, steps `usage-s1`..`usage-s9`, bugs `usage-b*`). Every commit 
 - Baseline `NUM_RUNS=100 npm test`: 77/77 pass (host links: system dsh 0.2.1-alpha.2, fleet dsh-TUI 0.14.0).
 
 - usage-b1 U13 red/fix: red 0dc5019 (normalize.properties fails 4/4, seed 521531315, NUM_RUNS=1000;
-  re-verified in a worktree before the fix), fix 728c570 (toPercent drops the fraction scaling; route
+  re-verified in a worktree before the fix), fix 506fd48 (toPercent drops the fraction scaling; route
   test corrected). Full fast suite 85/85 green, fail 0 skipped 0, NUM_RUNS=1000 (host links: system dsh
   0.2.1-alpha.2, fleet dsh-TUI 0.14.0).
 - usage-s4 rig vendoring a6415ed: test/rig/upstream = nix-config 2d658d4 byte-identical (diff), rig.mjs =

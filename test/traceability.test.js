@@ -3,7 +3,7 @@
 // fast check) when a property loses its test or someone adds a skip.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,7 +42,13 @@ function sources(dir) {
 }
 
 test('no required suite silently skips or is a todo', () => {
-  for (const file of sources(here)) {
+test('every test-file citation in TESTING.md exists (usage-b3)', () => {
+  const cited = [...testing.matchAll(/(test\/[\w./-]+\.test\.js)/g)].map((m) => m[1]);
+  const bad = cited.filter((c) => !existsSync(join(here, '..', c)));
+  assert.deepEqual(bad, [], 'TESTING.md cites files that do not exist: ' + bad.join(', '));
+});
+
+function sources(dir) {
     const text = readFileSync(file, 'utf8');
     assert.ok(!/\.skip\(/.test(text), file + ' contains a skip');
     assert.ok(!/\.todo\(/.test(text), file + ' contains a todo');

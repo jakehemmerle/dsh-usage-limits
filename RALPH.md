@@ -61,6 +61,29 @@ epic `usage-epic`, steps `usage-s1`..`usage-s9`, bugs `usage-b*`). Every commit 
   809feeb (bookkeeping), on top of the rebased 3711bd8 (s4) and f8f638f (s3) over the concurrent
   U13 fix 506fd48 pushed by the parallel session (my duplicate 728c570 was dropped in the rebase).
 
+## Round C log (closure audit + release, October 12, 2026)
+
+- Jake's closure audit walked all 9 closed beads; two reopen + one record correction:
+  usage-b1 re-closed citing the landed 506fd48 (the cited 728c570 duplicate was dropped in the
+  round-1 rebase); usage-s3 reopened (its "NUM_RUNS=1000" fast-suite evidence was hollow:
+  throttle 150/30/400 and route 150 hard-coded; tui.host/oracle.cmux never scaled with NUM_RUNS -
+  the Oct 11 audit finding "hard-coded numRuns" was unfixed); usage-s7 reopened (TESTING.md
+  cited test/source.properties.test.js, which git history proves never existed, and the s7 gate
+  only checked the traceability section rows).
+- usage-b2 red 711751f -> fix bd46b70: test/budget.test.js gate; all fast properties now derive
+  from NUM_RUNS via test/support/fc.js (cost/floor); TESTING.md Budgets describes the contract.
+- usage-b3 red c15b62b -> fix b20d7e1: traceability gate fails on any TESTING.md citation that
+  does not exist; the promised U4/U5 timeout/backoff/late-discard behaviours are real tests in
+  test/source.properties.test.js; citation cell repaired.
+- Fast suite at the release budget: NUM_RUNS=1000 SEED=7 - 94/94, fail 0 skipped 0 (14 s).
+- Release campaigns through nix run .#e2e (E2E_RUNS=20, SEED=101/202/303/404/505): dst 100 cases
+  5/5 seeds rc=0 with 7/7 tests per seed; web 100 cases 5/5 seeds rc=0 with 3/3 tests per seed;
+  both surfaces' coverage counters reproduce the pre-handoff release campaign exactly.
+- RELEASING.md (procedure per the skill's references/release.md) and CHANGELOG.md written;
+  version 0.2.2 -> 0.2.3-alpha.1 (PATCH; prerelease channel matches DSH 0.2.1-alpha.2); tagged
+  v0.2.3-alpha.1 after nix flake check green; usage-s3/s7 re-closed with the new evidence;
+  usage-s9 + epic closed; every reopen and its reason is in the beads and in this log.
+
 ## Gotchas
 
 - `bd init` auto-commits and installs Codex/Claude/Cursor hooks plus `core.hooksPath`; those were removed

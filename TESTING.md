@@ -5,6 +5,52 @@ the real clients: a real `dst` (dsh-TUI) process in a private tmux socket and a 
 headless Chromium (Playwright), both against a mock model and a mock usage upstream. Faster layers
 supplement them.
 
+## Round C of the October 2026 loop (closure audit + release gate; October 12, 2026)
+
+Round C began with Jake's **closure audit**: every closed bead was re-verified against its recorded
+evidence (commit shas, green runs, honest gaps, audit findings). Outcome:
+
+- **`usage-b1` record corrected**: the old close reason cited fix `728c570`, a duplicate dropped
+  in the round-1 rebase; the landed fix is `506fd48`. No code change.
+- **`usage-s3` reopened** and re-closed: its evidence claimed a `NUM_RUNS=1000` fast suite, but three
+  files hard-coded their budgets (throttle 150/30/400, route 150) and two more drove runs from
+  `HOST_RUNS`/`CMUX_RUNS` defaults that never scale with `NUM_RUNS` - the Oct 11 audit finding
+  "hard-coded numRuns" had sat unfixed. **usage-b2** red `711751f` -> fix `bd46b70` routes every fast
+  property through `test/support/fc.js` (cost/floor) with a `test/budget.test.js` gate.
+- **`usage-s7` reopened** and re-closed: TESTING.md cited `test/source.properties.test.js`, which
+  `git log --all` proves never existed, while the traceability gate only checked the table rows.
+  **usage-b3** red `c15b62b`: the gate now fails on any TESTING.md citation that does not exist;
+  fix `b20d7e1`: the promised U4/U5 behaviours are real generated tests in
+  `test/source.properties.test.js` (hang -> timeout -> failed reason, backoff gate, a late exchange
+  resolving after the timeout never replaces anything - including good data a newer refresh applied -
+  and recovery after the backoff window) plus the citation cell repaired.
+- Fast suite at the release budget: `NUM_RUNS=1000 SEED=7 npm test` - **94/94 pass, fail 0,
+  skipped 0** (14 s). Budgets the gate guarantees: route 250, throttle route 167 (floor 150), burst
+  30 (floor 30), reducer 1000 (floor 400), U13 properties 1000 each, source-level timeout properties
+  167 each (cost 6, floor 60), host mounts `NUM_RUNS/4` behind `HOST_RUNS` (floor 150), cmux
+  differential `NUM_RUNS/16` behind `CMUX_RUNS` (floor 10).
+
+**Release campaigns** (`usage-s9` gate; seeds 101, 202, 303, 404, 505 - 20 generated cases per
+seed, **100 cases per surface**, fresh isolated rig profile per case; `E2E_RUNS=20 SEED=<seed>`
+through `nix run .#e2e`; dsh 0.2.1-alpha.2, flake-built dsh-TUI 0.14.0+launchpad-status
+`vv97pr2y`, node 24.21.0, nix playwright-driver browsers build 1243, npm playwright 1.63.0):
+
+| Surface | Seeds | Cases | Result |
+|---|---|---|---|
+| dst (real dsh-TUI in tmux) | 101, 202, 303, 404, 505 | 100 | 7/7 tests per seed, 5/5 seeds rc=0, fail 0 skipped 0 |
+| dsh web (Playwright) | 101, 202, 303, 404, 505 | 100 | 3/3 tests per seed, 5/5 seeds rc=0, fail 0 skipped 0 |
+
+dst transition coverage over the 100 cases - **the same counters the pre-handoff release campaign
+recorded**, regenerated from the identical seed set and case shapes (set 194: ok 120, status 24,
+malformed 28, hang 22; grant 101: valid 29, expired 32, absent 40; submit 111; busy 44; restart 59;
+resize 85; idle 53; line shown after 506 steps, hidden after 141).
+
+Web transition coverage over the 100 cases: set 297 (ok 189, status 30, malformed 35, hang 43),
+grant 151 (valid 62, expired 43, absent 46), reload 79, viewport 67, idle 74; after each step the
+trigger read a headline 580 times, `Usage` 72 times, hidden 16 times - always equal to the spec
+oracle; again exactly the historical campaign's recorded counters.
+
+Both campaigns replay with the same `SEED` + `E2E_RUNS` (shrink via `FC_PATH`).
 ## Round 1 of the October 2026 loop (dsh 0.2.1-alpha.2, dsh-TUI 0.14.0, node 24.21.0)
 
 - **U13 red → fix** (percent/fraction bug): red `0dc5019` added `test/normalize.properties.test.js`
@@ -39,23 +85,24 @@ supplement them.
 ## Traceability (usage-s7; gate: test/traceability.test.js)
 
 Last result per property, October 11–12, 2026 (dsh 0.2.1-alpha.2, dsh-TUI 0.14.0 + launchpad-status,
-node 24.21.0; fast at NUM_RUNS=1000, campaigns at E2E_RUNS=25, SEED=1):
+node 24.21.0; fast at NUM_RUNS=1000; release campaigns seeds 101-505 at E2E_RUNS=20 per seed
+(round C, 100 cases per surface - see the Round C section):
 
 | Property | Test file(s) | Surface | Last result |
 |---|---|---|---|
-| U1 line format | test/oracle.cmux.test.js; test/line.properties.test.js; test/tui.host.test.js; test/e2e/tui.e2e.test.js | dst + host runtime + cmux differential | fast 85/85; dst e2e 7/7 |
-| U2 severity colours | test/tui.host.test.js; test/client.test.js; test/e2e/tui.e2e.test.js (SGR); test/e2e/web.e2e.test.js (classes) | dst + web + host runtime | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U3 shown iff data | test/fixtures.test.js; test/proxy.test.js; test/tui.host.test.js; both e2e files | dst + web | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U4 stale, no overwrite | test/route.properties.test.js; test/throttle.properties.test.js; test/tui.host.test.js; both e2e files | both + host runtime | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U5 request budget | test/throttle.properties.test.js; test/tui.host.test.js (U5); both e2e files (idle/resize counts) | both + host runtime | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U6 countdown/reset | test/tui.host.test.js (U4/U6, U6); both e2e files | dst + web | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U7 width tiers | test/tui.host.test.js (widths 1–300); test/e2e/tui.e2e.test.js (narrow terminals) | dst + host runtime | fast 85/85; dst e2e 7/7 |
-| U8 secrets | test/route.properties.test.js (secrecy); test/tui.host.test.js (U8); both e2e files | dst + web + logs | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U9 lifecycle | test/tui.host.test.js; test/e2e/tui.e2e.test.js (Launchpad, chat, /model, restart); test/e2e/web.e2e.test.js (reload) | dst + web | fast 85/85; dst e2e 7/7; web e2e 3/3 |
-| U10 unload | test/tui.host.test.js (U10) | host runtime | fast 85/85 |
+| U1 line format | test/oracle.cmux.test.js; test/line.properties.test.js; test/tui.host.test.js; test/e2e/tui.e2e.test.js | dst + host runtime + cmux differential | fast 94/94; dst e2e 7/7 |
+| U2 severity colours | test/tui.host.test.js; test/client.test.js; test/e2e/tui.e2e.test.js (SGR); test/e2e/web.e2e.test.js (classes) | dst + web + host runtime | fast 94/94; dst e2e 7/7; web e2e 3/3 |
+| U3 shown iff data | test/fixtures.test.js; test/proxy.test.js; test/tui.host.test.js; both e2e files | dst + web | fast 94/94; dst e2e 7/7; web e2e 3/3 |
+| U4 stale, no overwrite | test/route.properties.test.js; test/throttle.properties.test.js; test/source.properties.test.js (timeout/backoff/late-discard); test/tui.host.test.js; both e2e files | both + host runtime + source level | fast 94/94; release campaigns 5/5 seeds both surfaces |
+| U5 request budget | test/throttle.properties.test.js; test/source.properties.test.js (backoff gate); test/tui.host.test.js (U5); both e2e files (idle/resize counts) | both + host runtime + source level | fast 94/94; release campaigns 5/5 seeds both surfaces |
+| U6 countdown/reset | test/tui.host.test.js (U4/U6, U6); both e2e files | dst + web | fast 94/94; dst e2e 7/7; web e2e 3/3 |
+| U7 width tiers | test/tui.host.test.js (widths 1–300); test/e2e/tui.e2e.test.js (narrow terminals) | dst + host runtime | fast 94/94; dst e2e 7/7 |
+| U8 secrets | test/route.properties.test.js (secrecy); test/tui.host.test.js (U8); both e2e files | dst + web + logs | fast 94/94; dst e2e 7/7; web e2e 3/3 |
+| U9 lifecycle | test/tui.host.test.js; test/e2e/tui.e2e.test.js (Launchpad, chat, /model, restart); test/e2e/web.e2e.test.js (reload) | dst + web | fast 94/94; dst e2e 7/7; web e2e 3/3 |
+| U10 unload | test/tui.host.test.js (U10) | host runtime | fast 94/94 |
 | U11 web/dst agree | test/client.test.js (headline); test/e2e/web.e2e.test.js (U11 vs dst oracle) | web + dst oracle | fast 85/85; web e2e 3/3 |
 | U12 credentials untouched | test/e2e/tui.e2e.test.js; test/e2e/web.e2e.test.js (parsed records) | dst + web | dst e2e 7/7; web e2e 3/3 |
-| U13 percent rounding | test/normalize.properties.test.js; test/route.properties.test.js (U13 through the route) | host runtime + route | fast 85/85 (red 0dc5019 → fix 506fd48) |
+| U13 percent rounding | test/normalize.properties.test.js; test/route.properties.test.js (U13 through the route) | host runtime + route | fast 94/94 (red 0dc5019 → fix 506fd48) |
 
 ## Reference tests transferred from omp
 

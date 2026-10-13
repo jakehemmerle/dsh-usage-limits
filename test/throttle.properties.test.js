@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fc from 'fast-check';
+import { fc, fcOpts } from './support/fc.js';
 import { initialState, reduce, AUTH_RETRY_MS, MAX_BACKOFF_MS } from '../lib/machine.js';
 import { assertReport } from './support/contract.js';
 import { mountHost, makeClock, serve, fixture, signedInRecords, MINUTE, HOUR, PROVIDER_IDS } from './support/host.js';
 
-const RUNS = { numRuns: 150 };
+const RUNS = fcOpts('throttle gates through the route', { cost: 6, floor: 150 });
 const FLOOR_MS = 60_000;
 
 const outcomeKind = fc.oneof(
@@ -94,7 +94,7 @@ test('a concurrent burst shares one in-flight upstream fetch per provider', asyn
     assert.equal(host.calls.anthropic.length, 1);
     assert.equal(host.calls['openai-codex'].length, 1);
     for (const response of responses) assert.deepEqual(response.body, responses[0].body);
-  }), { numRuns: 30 });
+  }), fcOpts('concurrent burst shares one in-flight upstream fetch', { cost: 50, floor: 30 }));
 });
 
 test('a configured minIntervalMs below the floor is raised to 60 s', async () => {
@@ -216,7 +216,7 @@ test('reducer: a fetch starts exactly when the throttle, backoff, and auth gates
         phasesSeen.add(state.phase);
       }
     },
-  ), { numRuns: 400 });
+  ), fcOpts('reducer model: gates stay honest', { cost: 1, floor: 400 }));
   assert.deepEqual([...phasesSeen].sort(), ['auth-blocked', 'backoff', 'fetching', 'idle', 'ok']);
 });
 

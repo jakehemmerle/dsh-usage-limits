@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fc from 'fast-check';
+import { fc, fcOpts } from './support/fc.js';
 import { assertReport, expectedHeadline } from './support/contract.js';
 import {
   mountHost, makeClock, okReplies, reply, serve, signedInRecords, windowsOf,
@@ -8,7 +8,7 @@ import {
 } from './support/host.js';
 import { anthropicBody, codexBody, upstreamExchange, tokenString, windowSeconds } from './support/arbitraries.js';
 
-const RUNS = { numRuns: 150 };
+const RUNS = fcOpts('route properties', { cost: 4, floor: 150 });
 
 function cycle(exchanges) {
   return (_request, index) => serve(exchanges[index % exchanges.length]);

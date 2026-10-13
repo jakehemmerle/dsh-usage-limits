@@ -91,7 +91,13 @@ Environment: `DSH_TUI_DIR` selects the dsh-TUI build (the patched build for Laun
 
 ## Budgets
 
-- Fast properties: 1,000 runs each (`NUM_RUNS`).
+- Fast properties derive every case count from `NUM_RUNS` (default 1,000; gate: `test/budget.test.js`).
+  Pure properties use the full count; properties that pay a real per-case cost divide it through
+  `test/support/fc.js` (`fcOpts`, which fixes the seed from `FC_SEED`/`SEED`, honours `FC_PATH` and
+  prints `[fc] <name> seed=… runs=…`) with a deterministic floor: route properties cost 4 (250 at the
+  default), throttle's route property cost 6 (167, floor 150), its burst dedupe cost 50 (floor 30),
+  its reducer model cost 1 with floor 400, host-runtime mounts wrap `NUM_RUNS/4` behind `HOST_RUNS`
+  (floor 150) and the cmux differential wraps `NUM_RUNS/16` behind `CMUX_RUNS` (floor 10).
 - Real-client campaigns: 100 generated cases per surface over 5 recorded seeds (20 each), sequences
   of 1–12 actions; each case uses a fresh isolated profile. Iteration uses `E2E_RUNS=3`.
 - Flake check: each e2e file 5 times in a row at the iteration budget.

@@ -7,9 +7,9 @@ import fc from 'fast-check';
 import { bootTui, fakeUpstream, fakeIntervals, makeClock, PROXY, UPSTREAM, PROXY_KEY, TOKENS, KEY, cordis } from './support/tui-host.js';
 import { ACCOUNTS, grant } from './e2e/support/scenario.mjs';
 import { expectedLine, COLOUR } from './oracle/line.mjs';
-import { T0, windowArb } from './support/v2.js';
+import { T0, NUM_RUNS, windowArb } from './support/v2.js';
 
-const RUNS = Number(process.env.HOST_RUNS ?? 150);
+const RUNS = process.env.HOST_RUNS !== undefined ? Number(process.env.HOST_RUNS) : Math.max(150, Math.round(NUM_RUNS / 4));
 const seed = process.env.SEED === undefined ? undefined : Number(process.env.SEED);
 const POLL = 60_000;
 const TICK = 30_000;

@@ -9,11 +9,11 @@ import { join } from 'node:path';
 import test from 'node:test';
 import fc from 'fast-check';
 import { renderLine } from '../lib/line.js';
-import { v2Report } from './support/v2.js';
+import { v2Report, NUM_RUNS } from './support/v2.js';
 
 const SCRIPT = new URL('./oracle/cmux-usage', import.meta.url).pathname;
 const STUB = new URL('./oracle/omp-stub', import.meta.url).pathname;
-const RUNS = Number(process.env.CMUX_RUNS ?? 60);
+const RUNS = process.env.CMUX_RUNS !== undefined ? Number(process.env.CMUX_RUNS) : Math.max(10, Math.round(NUM_RUNS / 16));
 const MIN = 60_000;
 
 function ompJson(entries, now) {

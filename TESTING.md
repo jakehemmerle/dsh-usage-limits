@@ -1,9 +1,61 @@
 # Testing dsh-usage-limits
 
-Product properties U1–U12 are defined in [SPEC.md](SPEC.md). Every applicable property runs through
+Product properties U1–U13 are defined in [SPEC.md](SPEC.md). Every applicable property runs through
 the real clients: a real `dst` (dsh-TUI) process in a private tmux socket and a real `dsh web` in
 headless Chromium (Playwright), both against a mock model and a mock usage upstream. Faster layers
 supplement them.
+
+## Round 1 of the October 2026 loop (dsh 0.2.1-alpha.2, dsh-TUI 0.14.0, node 24.21.0)
+
+- **U13 red → fix** (percent/fraction bug): red `0dc5019` added `test/normalize.properties.test.js`
+  (4 properties, oracle from SPEC, `test/support/fc.js` budget/replay helper); it fails 4/4 at
+  NUM_RUNS=1000 (re-verified at seed 521531315 in a clean worktree of the red commit). Fix `728c570`
+  drops `toPercent`'s fraction scaling and aligns `route.properties.test.js` with the corrected spec.
+- **Fast suite**: `NUM_RUNS=1000 npm test` — 85/85 pass, fail 0, skipped 0 (host-linked system dsh
+  0.2.1-alpha.2 and fleet dsh-TUI 0.14.0; same result inside the Nix sandbox with the flake-built
+  dsh-TUI).
+- **Vendored rig** (`a6415ed`): `test/rig/upstream` is nix-config `2d658d4` byte for byte;
+  `test/rig.provenance.test.js` fails on drift, on a tmux server that could read the user tmux.conf
+  (now `-f /dev/null`) and on any `~/.agents` or absolute-path import.
+- **Nix sandbox** (`nix flake check`, all checks passed): the sandbox lacks `/usr/bin/env` and `jq`,
+  which the cmux-usage parity oracle needs — `checks.fast` now runs `patchShebangs` and carries
+  `pkgs.jq`. Found while proving `nix flake check` green, fixed in the flake (repo oracle copy
+  untouched).
+- **Real dst campaign** (`DSH_TUI_DIR` = flake-built dsh-TUI 0.14.0+launchpad-status
+  `/nix/store/vv97pr2y8x41a40d12dqc5yriaz2apwn-dsh-tui-0.14.0`): `E2E_RUNS=25 SEED=1` — 7/7 pass,
+  including the 25-case generated campaign (Launchpad and chat both exercised; campaign ran 192.7 s).
+- **Real web campaign** (`PLAYWRIGHT_BROWSERS_PATH` = nixpkgs `playwright-driver.browsers`, chromium
+  build 1243, npm playwright 1.63.0): `E2E_RUNS=25 SEED=1` — **3/3 pass** (568 s total; the 25-case
+  generated campaign ran 551 s). Transition coverage over the campaign: set 65 (ok 35, hang 7,
+  malformed 12, status 11), grant 36 (absent 14, valid 14, expired 8), reload 28, viewport 12
+  (390 px touch included), idle 18; after each step the trigger read a headline 125 times,
+  `Usage` 25 times and was hidden 9 times — always equal to the spec oracle.
+- **First-run blocker found and fixed in the harness** (not a plugin bug): on a bare rig HOME,
+  `xdg-user-dir DOCUMENTS` falls back to HOME itself and dsh refuses Documents == HOME, so the
+  default workspace was never created and the hero showed the workspace chooser with no composer.
+  The e2e harness now pins `XDG_CONFIG_HOME` inside the profile home (`user-dirs.dirs` →
+  `XDG_DOCUMENTS_DIR=<home>/Documents`), so the default workspace lands in the disposable profile.
+
+## Traceability (usage-s7; gate: test/traceability.test.js)
+
+Last result per property, October 11–12, 2026 (dsh 0.2.1-alpha.2, dsh-TUI 0.14.0 + launchpad-status,
+node 24.21.0; fast at NUM_RUNS=1000, campaigns at E2E_RUNS=25, SEED=1):
+
+| Property | Test file(s) | Surface | Last result |
+|---|---|---|---|
+| U1 line format | test/oracle.cmux.test.js; test/line.properties.test.js; test/tui.host.test.js; test/e2e/tui.e2e.test.js | dst + host runtime + cmux differential | fast 85/85; dst e2e 7/7 |
+| U2 severity colours | test/tui.host.test.js; test/client.test.js; test/e2e/tui.e2e.test.js (SGR); test/e2e/web.e2e.test.js (classes) | dst + web + host runtime | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U3 shown iff data | test/fixtures.test.js; test/proxy.test.js; test/tui.host.test.js; both e2e files | dst + web | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U4 stale, no overwrite | test/route.properties.test.js; test/throttle.properties.test.js; test/tui.host.test.js; both e2e files | both + host runtime | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U5 request budget | test/throttle.properties.test.js; test/tui.host.test.js (U5); both e2e files (idle/resize counts) | both + host runtime | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U6 countdown/reset | test/tui.host.test.js (U4/U6, U6); both e2e files | dst + web | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U7 width tiers | test/tui.host.test.js (widths 1–300); test/e2e/tui.e2e.test.js (narrow terminals) | dst + host runtime | fast 85/85; dst e2e 7/7 |
+| U8 secrets | test/route.properties.test.js (secrecy); test/tui.host.test.js (U8); both e2e files | dst + web + logs | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U9 lifecycle | test/tui.host.test.js; test/e2e/tui.e2e.test.js (Launchpad, chat, /model, restart); test/e2e/web.e2e.test.js (reload) | dst + web | fast 85/85; dst e2e 7/7; web e2e 3/3 |
+| U10 unload | test/tui.host.test.js (U10) | host runtime | fast 85/85 |
+| U11 web/dst agree | test/client.test.js (headline); test/e2e/web.e2e.test.js (U11 vs dst oracle) | web + dst oracle | fast 85/85; web e2e 3/3 |
+| U12 credentials untouched | test/e2e/tui.e2e.test.js; test/e2e/web.e2e.test.js (parsed records) | dst + web | dst e2e 7/7; web e2e 3/3 |
+| U13 percent rounding | test/normalize.properties.test.js; test/route.properties.test.js (U13 through the route) | host runtime + route | fast 85/85 (red 0dc5019 → fix 728c570) |
 
 ## Reference tests transferred from omp
 
@@ -120,6 +172,16 @@ trigger showed a headline 580 times, `Usage` 72 times and was hidden 16 times.
 | M6 countdown tick requests a refresh | survived at first (the throttle hid it); host-runtime U5 now fires a tick after every interval has elapsed and kills it |
 
 Caught 6/6 after strengthening U5.
+
+Round-2 additions (October 12, 2026), including the two the audit named:
+
+| Mutant | Killed by |
+|---|---|
+| M7 abort listener not removed after a fetch settles (lib/source.js) | new test/source.leak.test.js: a settled report and a timed-out report each leave zero listeners on the lifetime signal |
+| M8 reset boundary `resetsAt <= now` → `< now` (lib/report.js) | test/tui.host.test.js U6: a window whose reset has just passed shows 0% with no countdown |
+
+Caught 8/8 cumulative; the two new mutants each failed their named test before the revert (planted one
+at a time in the working tree, then restored - lib/ is byte-identical to the committed state).
 
 ### Installed artifact (work Mac; first nix-config `5e9f96d`, generation 40, rollback 39)
 

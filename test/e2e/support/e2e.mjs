@@ -1,6 +1,8 @@
 // Shared e2e case harness: one isolated profile (rig), mock model, mock usage upstream and
 // synthetic DSH sign-ins per generated case; an observation model that derives, from the mock's
 // request log alone, what the spec says each client should show.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startMockLlm } from '../../rig/mock-llm.mjs';
 import { makeProfile } from '../../rig/rig.mjs';
@@ -57,6 +59,14 @@ export async function startCase({ kind, proxyKey = true, grants = {}, responses 
     // The managed web profile acknowledges the preview notice the same way (home/dsh.nix).
     rows: kind === 'web' ? [{ id: 'ui-settings-general', name: '@deepseek-ai/dsh-client-ui-settings-general', config: { welcomeNoticeVersion: '2026-09-28.1' } }] : [],
   });
+  // dsh's default-workspace creation runs \`xdg-user-dir DOCUMENTS\`, whose fallback (a bare
+  // profile HOME) returns HOME itself and dsh refuses Documents == HOME - the hero then shows the
+  // workspace chooser and no composer. Pin the XDG documents dir inside the disposable profile home.
+  const xdgConfig = join(profile.home, '.config');
+  mkdirSync(xdgConfig, { recursive: true });
+  writeFileSync(join(xdgConfig, 'user-dirs.dirs'), 'XDG_DOCUMENTS_DIR="' + join(profile.home, 'Documents') + '"\n');
+  profile.env.XDG_CONFIG_HOME = xdgConfig;
+  if (Array.isArray(profile.forward) && !profile.forward.includes('XDG_CONFIG_HOME')) profile.forward.push('XDG_CONFIG_HOME');
   const handle = {
     mock, upstream, profile, state, secrets,
     /** Requests before this time belong to an earlier (killed) process. */
@@ -93,7 +103,6 @@ function recordsFor(grants, secrets) {
   return out;
 }
 
-import { readFileSync } from 'node:fs';
 /**
  * The DSH sign-in records (`llm-pi-ai/*`) in a credentials file, parsed, as a stable JSON string.
  * dsh itself adds other records (dsh web's browser session) and re-renders the YAML layout, so U12

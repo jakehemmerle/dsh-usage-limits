@@ -108,13 +108,19 @@
             ${pkgs.lib.concatStringsSep "\n" (pkgs.lib.mapAttrsToList (k: v: "export ${k}=${pkgs.lib.escapeShellArg v}") envVars)}
             root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
             cd "$root"
-            [ -f package.json ] && grep -q '"@local/dsh-usage-limits"' package.json || { echo "run from the dsh-usage-limits checkout" >&2; exit 2; }
+            if [ ! -f package.json ] || ! grep -q '"@local/dsh-usage-limits"' package.json; then
+              echo "run from the dsh-usage-limits checkout" >&2
+              exit 2
+            fi
             [ -e node_modules ] || ln -s ${nodeModules}/node_modules node_modules
             echo "dsh $(dsh --version); dsh-TUI $DSH_TUI_DIR"
             status=0
             suites=("$@"); [ "${"$"}{#suites[@]}" -gt 0 ] || suites=(tui web)
             for s in "${"$"}{suites[@]}"; do
-              NODE_ENV=test node --test --test-concurrency=1 --test-timeout=21600000 "test/e2e/$s.e2e.test.js" || status=$?
+              export NODE_ENV=test
+              node --test --test-concurrency=1 --test-timeout=21600000 "test/e2e/$s.e2e.test.js"
+              rc=$?
+              if [ "$rc" -ne 0 ]; then status=$rc; fi
             done
             exit "$status"
           '';

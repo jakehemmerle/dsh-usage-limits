@@ -126,6 +126,9 @@ plugin removes the line, stops its timers and cancels in-flight requests.
   configured accounts without data → the trigger reads `Usage` so the panel can explain the error (as 0.1.0).
 - The panel lists every configured account in the order above with its plan, every window (line and
   scoped), reset times and a stale/error note, as in 0.1.0.
+- The web client re-fetches the plugin's route every 60 s (README's "polls the plugin's route every
+  minute"); the route's upstream fetches stay within the Timing policy above, so page reloads and
+  repeated polls never add upstream requests.
 
 ### Failure behaviour (both clients)
 

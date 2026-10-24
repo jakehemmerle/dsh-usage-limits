@@ -1,8 +1,8 @@
 # Agent instructions
 
-- Work state lives in **beads** (`bd`, prefix `usage`): `bd ready`, `bd show <id>`, `bd close <id> --reason "<evidence>"`.
-  `export.auto` is on; run `bd export` before committing so `.beads/issues.jsonl` is current. Commit the JSONL,
-  never the Dolt database.
+- Work is tracked in the workspace Beads instance (`nx`, `~/ws/.beads`), label `project:dsh`.
+  In the `~/ws/code/personal/<repo>` clone `bd` resolves there through `.beads/redirect`
+  (written by `ws sync`); this repo has no Beads database of its own.
 - Ralph-loop state and gotchas: [RALPH.md](RALPH.md). Product spec: [SPEC.md](SPEC.md). Evidence and
   traceability: [TESTING.md](TESTING.md). Releases: [RELEASING.md](RELEASING.md).
 - Enter the environment with `nix develop`; fast suites: `npm test` (or `nix flake check`); real clients:

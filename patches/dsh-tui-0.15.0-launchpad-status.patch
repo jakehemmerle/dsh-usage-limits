@@ -1,0 +1,79 @@
+dsh-usage-limits launchpad-status: show plugin status contributions on the Launchpad (dsh-TUI 0.15.0).
+
+dsh-TUI 0.15.0 renders `ctx.tuiStatus` text entries and rich views (registerView, the frozen
+`tui.dsh/v1alpha1` status-line seam XI) only in Chat, above the prompt. The Launchpad (first screen)
+is a separate component and shows none, so a status line appears only after the first prompt. Chat
+now passes its status entries, views, the pointer-only view kit and the view error reporter to the
+Launchpad, which renders them the same way (rich views inside PluginStatusViewBoundary, then the
+joined dim text) in one full-width, centred block above the input card. The layout budgets the
+block's rows, the block yields first when rows run short, and the input card never shrinks.
+
+Applies to stock nix-dsh dsh-tui 0.15.0 (after its preset-schedule-deny fix) on its own and in the
+fleet order (keybindings, alt, model-selector, usage-limits, speed, incognito).
+Source: https://github.com/jakehemmerle/dsh-usage-limits (nix/tui-patch.nix).
+
+diff --git a/lib/types/screens/Chat.js b/lib/types/screens/Chat.js
+index 48fbbfc..366f7f5 100644
+--- a/lib/types/screens/Chat.js
++++ b/lib/types/screens/Chat.js
+@@ -5807,7 +5807,7 @@ export function Chat({ channel, questionStore, approvalStore, extensionDialogs,
+                 ? { text: t('status-starting', { backend: channel.backendCapabilities?.backendLabel ?? 'DSH' }), color: 'warning' }
+                 : undefined
+             : { text: lastNotification.text, ...(lastNotification.color === undefined ? {} : { color: lastNotification.color }) };
+-        const launchpad = (_jsx(Launchpad, { query: launchpadDraft, imageComposer: { channel, bindings: launchpadImagesRef.current }, cursorOffset: launchpadCaret, focusIndex: launchpadFocus, isTerminalFocused: terminalFocused, whale: channel.whale, whaleIdle: channel.whaleIdle, whaleGirl: channel.whaleGirl, fontId: splashFontIdOf(channel.splashFont), brand: brand, starred: starred, onStarClick: runStarAction, firstRun: onboardingPending, actions: launchpadActions, 
++        const launchpad = (_jsx(Launchpad, { statusEntries: statusEntries, statusViews: statusViews, statusViewUi: STATUS_VIEW_UI, onStatusViewError: (key, error) => statusContributions.reportViewError(key, error), query: launchpadDraft, imageComposer: { channel, bindings: launchpadImagesRef.current }, cursorOffset: launchpadCaret, focusIndex: launchpadFocus, isTerminalFocused: terminalFocused, whale: channel.whale, whaleIdle: channel.whaleIdle, whaleGirl: channel.whaleGirl, fontId: splashFontIdOf(channel.splashFont), brand: brand, starred: starred, onStarClick: runStarAction, firstRun: onboardingPending, actions: launchpadActions, 
+             // 落地页没有 toast 区：最近一条 channel 通知借 Tips 行显示。
+             notice: launchpadNotice, 
+             // 参数行四段点开的既有选择器（第五版）：pickerPanels 与聊天页共用
+diff --git a/lib/types/screens/Launchpad.js b/lib/types/screens/Launchpad.js
+index 4d7e1b3..bff97d4 100644
+--- a/lib/types/screens/Launchpad.js
++++ b/lib/types/screens/Launchpad.js
+@@ -4,6 +4,7 @@ import { unlink } from 'node:fs/promises';
+ import { basename, resolve } from 'node:path';
+ import { Box, Text, useInput, useTerminalSize, useNativeCursor } from '../ui.js';
+ import { SearchBox } from '../components/SearchBox.js';
++import { PluginStatusViewBoundary } from '../components/PluginStatusViewBoundary.js';
+ import { OverlayAbove } from '../components/OverlayAbove.js';
+ import { CommandSuggestions } from '../components/CommandSuggestions.js';
+ import { LogoV2 } from '../components/LogoV2.js';
+@@ -234,7 +235,11 @@ function KernelCorner({ rows, focused, onActivate, onHover, onHoverLeave, }) {
+  * 天然没有它们，所以每个可点目标都必须有一条键盘路径（这里全部有：焦点 +
+  * Enter）。
+  */
+-export function Launchpad({ query, cursorOffset, focusIndex, isTerminalFocused, whale, whaleIdle, whaleGirl, brand, fontId, egg, starred, onStarClick, firstRun, actions, overlayPanel, inputPaused = false, onParamPick, model, effort, preset, permission, commands, onCommandPick, clipboardReader = readClipboard, imageComposer, 
++// dsh-usage-limits launchpad-status (jakehemmerle/dsh-usage-limits nix/tui-patch.nix): plugin status
++// contributions (tuiStatus text entries and rich views) also show on the Launchpad, above the input card.
++const NO_STATUS_ENTRIES = Object.freeze([]);
++const NO_STATUS_VIEWS = Object.freeze([]);
++export function Launchpad({ statusEntries = NO_STATUS_ENTRIES, statusViews = NO_STATUS_VIEWS, statusViewUi, onStatusViewError, query, cursorOffset, focusIndex, isTerminalFocused, whale, whaleIdle, whaleGirl, brand, fontId, egg, starred, onStarClick, firstRun, actions, overlayPanel, inputPaused = false, onParamPick, model, effort, preset, permission, commands, onCommandPick, clipboardReader = readClipboard, imageComposer, 
+ /** Tips 自动轮换间隔（第七版；测试缝：无头回归注入短间隔确定性驱动相位）。 */
+ tipRotateMs = TIP_ROTATE_MS, notice, 
+ /** 左下角工作目录铭牌被点击/回车时交给 Chat（开既有的 /workspace 工作区菜单）。 */
+@@ -493,7 +498,10 @@ onKernelPick, cwd, branch, tuiVersion, onFocusChange, onAction, onQueryChange, o
+     const [dailyEgg] = React.useState(() => egg === undefined ? pickSplashEgg() : egg);
+     const font = fontId === undefined ? dailyFont : splashFontById(fontId);
+     const titleFont = resolveSplashTitleFont(font, brand, dailyEgg);
+-    const layout = resolveLaunchpadLayout(columns, rows, {
++    // dsh-usage-limits launchpad-status: the status block takes rows the layout must budget for,
++    // or flexbox squeezes the input card to nothing; it reuses the card's top gap.
++    const statusRows = statusViews.reduce((n, view) => n + view.maxRows, 0) + (statusEntries.length > 0 ? 1 : 0);
++    const layout = resolveLaunchpadLayout(columns, Math.max(1, rows - statusRows), {
+         params: hasParams,
+         whale,
+         whaleGirl,
+@@ -796,7 +804,13 @@ onKernelPick, cwd, branch, tuiVersion, onFocusChange, onAction, onQueryChange, o
+         onFocusChange(-1);
+         event.stopImmediatePropagation();
+     });
+-    return (_jsxs(Box, { flexDirection: "column", width: columns, height: rows, onClick: onBlankClick, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, alignItems: "center", justifyContent: "center", children: [layout.showHero && (_jsx(LogoV2, { fontId: font.id, egg: dailyEgg, whale: layout.showWhale && whale, whaleIdle: whaleIdle, whaleGirl: layout.showWhale && whaleGirl, brand: brand, starred: starred, onStarClick: onStarClick, skipIntro: true, align: "center", chrome: "minimal", arrangement: "column" })), _jsxs(Box, { flexDirection: "column", width: cardWidth, marginTop: layout.heroGapRows, children: [_jsx(Box, { flexDirection: "column", borderStyle: "round", borderColor: inputFocused ? 'suggestion' : 'inactive', paddingX: 1, width: cardWidth, children: _jsx(SearchBox, { query: query, placeholder: t('launchpad-placeholder'), 
++    // dsh-usage-limits launchpad-status: the same block Chat renders above its prompt — rich views in
++    // their error boundary, then the joined text entries — full width and centred, above the card.
++    // When rows run short the block yields first, and the input card itself never shrinks.
++    const statusBlock = statusViews.length > 0 || statusEntries.length > 0
++        ? (_jsxs(Box, { flexDirection: "column", width: columns, alignItems: "center", flexShrink: 1, overflow: "hidden", marginTop: layout.heroGapRows, children: [statusViews.map(view => (_jsx(PluginStatusViewBoundary, { viewKey: view.key, onError: (key, error) => onStatusViewError?.(key, error), children: _jsx(Box, { flexDirection: "column", flexShrink: 0, maxHeight: view.maxRows, overflow: "hidden", children: React.createElement(view.component, { React, ui: statusViewUi }) }) }, `${view.key}:${view.registrationId}`))), statusEntries.length > 0 ? (_jsx(Text, { dimColor: true, wrap: "truncate", children: statusEntries.map(entry => entry.text).join(' · ') })) : null] }))
++        : null;
++    return (_jsxs(Box, { flexDirection: "column", width: columns, height: rows, onClick: onBlankClick, children: [_jsxs(Box, { flexDirection: "column", flexGrow: 1, alignItems: "center", justifyContent: "center", children: [layout.showHero && (_jsx(LogoV2, { fontId: font.id, egg: dailyEgg, whale: layout.showWhale && whale, whaleIdle: whaleIdle, whaleGirl: layout.showWhale && whaleGirl, brand: brand, starred: starred, onStarClick: onStarClick, skipIntro: true, align: "center", chrome: "minimal", arrangement: "column" })), statusBlock, _jsxs(Box, { flexDirection: "column", width: cardWidth, flexShrink: 0, marginTop: statusBlock === null ? layout.heroGapRows : 0, children: [_jsx(Box, { flexDirection: "column", borderStyle: "round", borderColor: inputFocused ? 'suggestion' : 'inactive', paddingX: 1, width: cardWidth, children: _jsx(SearchBox, { query: query, placeholder: t('launchpad-placeholder'), 
+                                     // 第七版（用户原话「光标永远不消失 哪怕焦点没了也不消失」）：
+                                     // 只要这一屏在，输入光标**常在**——焦点挪到参数段/入口行只影响
+                                     // 外框提亮（inputFocused），不再当光标的开关。
